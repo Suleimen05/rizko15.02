@@ -155,7 +155,7 @@ class ApiService {
   /**
    * Search trending videos (legacy - maps to searchTrends)
    */
-  async searchTrendingVideos(region = 'US', count = 30): Promise<TikTokVideo[]> {
+  async searchTrendingVideos(region = 'US'): Promise<TikTokVideo[]> {
     try {
       const result = await this.searchTrends({
         target: region,
@@ -172,7 +172,7 @@ class ApiService {
   /**
    * Search videos by hashtag (legacy - maps to searchTrends)
    */
-  async searchByHashtag(hashtag: string, count = 50): Promise<TikTokVideo[]> {
+  async searchByHashtag(hashtag: string): Promise<TikTokVideo[]> {
     try {
       const result = await this.searchTrends({
         target: hashtag,
@@ -189,7 +189,7 @@ class ApiService {
   /**
    * Get trending hashtags (legacy - not in backend, return mock)
    */
-  async getTrendingHashtags(region = 'US', count = 50): Promise<Hashtag[]> {
+  async getTrendingHashtags(): Promise<Hashtag[]> {
     // This endpoint doesn't exist in backend, return mock data
     return this.getMockTrendingHashtags();
   }
@@ -218,7 +218,7 @@ class ApiService {
   /**
    * Get user's videos (legacy - maps to getProfileReport)
    */
-  async getUserVideos(username: string, count = 30): Promise<TikTokVideo[]> {
+  async getUserVideos(username: string): Promise<TikTokVideo[]> {
     try {
       const report = await this.getProfileReport(username);
       return this.convertProfileFeedToTikTokVideos(report.full_feed);
@@ -239,7 +239,7 @@ class ApiService {
   /**
    * Generate AI script (legacy - not in backend, return mock)
    */
-  async generateAIScript(videoId: string, tone = 'engaging', niche = 'general'): Promise<AIScript> {
+  async generateAIScript(videoId: string): Promise<AIScript> {
     // This endpoint doesn't exist in backend, return mock data
     return this.getMockAIScript(videoId);
   }

@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { Users, UserPlus, TrendingUp, TrendingDown, BarChart3, Eye, Video, Calendar, Minus, Loader2 } from 'lucide-react';
+import { Users, UserPlus, TrendingUp, TrendingDown, BarChart3, Eye, Video, Calendar, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { useCompetitorSpy, useProfileReport } from '@/hooks/useTikTok';
-import { apiService } from '@/services/api';
-import type { Competitor, TikTokVideo, CompetitorData, ProfileReport } from '@/types';
+import type { Competitor, TikTokVideo } from '@/types';
 
 // Mock data
 const mockCompetitors: Competitor[] = [

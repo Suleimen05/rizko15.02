@@ -291,7 +291,7 @@ export function useSearchWithFilters(filters: SearchFilters) {
       if (filters.sortBy === 'views') {
         filtered.sort((a, b) => b.stats.playCount - a.stats.playCount);
       } else if (filters.sortBy === 'engagement') {
-        filtered.sort((a, b) => (b.engagementRate || 0) - (a.engagementRate || 0));
+        filtered.sort((a, b) => ((b as any).engagementRate || 0) - ((a as any).engagementRate || 0));
       } else if (filters.sortBy === 'viral') {
         filtered.sort((a, b) => (b.uts_score || b.viralScore || 0) - (a.uts_score || a.viralScore || 0));
       }
