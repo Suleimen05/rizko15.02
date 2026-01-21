@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { apiService } from '@/services/api';
 import type { Competitor, TikTokVideo } from '@/types';
 
 // Mock data
@@ -343,7 +344,7 @@ export function Competitors() {
         videoCount: spyData.channel_data.videos || 0,
         avgViews: spyData.metrics.avg_views || 0,
         engagementRate: spyData.metrics.engagement_rate || 0,
-        topVideos: spyData.top_3_hits.map(v => ({
+        topVideos: spyData.top_3_hits.map((v: any) => ({
           id: v.id,
           title: v.title || 'No title',
           description: v.title || '',

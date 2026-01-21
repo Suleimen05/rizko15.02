@@ -10,7 +10,7 @@ export function useTrendingVideos(region = 'US', count = 30) {
   const fetchVideos = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiService.searchTrendingVideos(region, count);
+      const data = await apiService.searchTrendingVideos(region);
       setVideos(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch trending videos');
@@ -34,7 +34,7 @@ export function useTrendingHashtags(region = 'US', count = 50) {
   const fetchHashtags = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiService.getTrendingHashtags(region, count);
+      const data = await apiService.getTrendingHashtags();
       setHashtags(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch trending hashtags');
@@ -61,7 +61,7 @@ export function useVideoSearch(hashtag: string, count = 50) {
     try {
       setLoading(true);
       setError(null);
-      const data = await apiService.searchByHashtag(hashtag, count);
+      const data = await apiService.searchByHashtag(hashtag);
       setVideos(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to search videos');
@@ -117,7 +117,7 @@ export function useUserProfile(username: string) {
         setLoading(true);
         const [profileData, videosData] = await Promise.all([
           apiService.getUserProfile(username),
-          apiService.getUserVideos(username, 30),
+          apiService.getUserVideos(username),
         ]);
         setProfile(profileData);
         setVideos(videosData);
@@ -172,7 +172,7 @@ export function useAIScriptGenerator(videoId: string, tone = 'engaging', niche =
     try {
       setLoading(true);
       setError(null);
-      const data = await apiService.generateAIScript(videoId, tone, niche);
+      const data = await apiService.generateAIScript(videoId);
       setScript(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate AI script');
