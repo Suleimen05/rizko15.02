@@ -11,3 +11,4 @@ apify-client
 numpy
 scikit-learn
 apscheduler
+google-generativeai
