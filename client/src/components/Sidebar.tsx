@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -10,16 +9,14 @@ import {
   Settings,
   HelpCircle,
   ChevronLeft,
-  ChevronRight,
   Sparkles,
-  Zap,
-  Target,
-  Bookmark,
-  History,
+  Crown,
+  ArrowUpRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Progress } from '@/components/ui/progress';
 
 interface SidebarProps {
   open: boolean;
@@ -33,24 +30,19 @@ const mainNavItems = [
     icon: LayoutDashboard,
   },
   {
-    title: 'Trending',
+    title: 'Trending Now',
     href: '/trending',
     icon: TrendingUp,
-    badge: 'New',
+    badge: 'NEW',
+    badgeVariant: 'default' as const,
   },
   {
-    title: 'Discover',
+    title: 'Discover Videos',
     href: '/discover',
     icon: Search,
   },
   {
-    title: 'AI Scripts',
-    href: '/ai-scripts',
-    icon: Sparkles,
-    badge: 'AI',
-  },
-  {
-    title: 'Account Search',
+    title: 'Account Audit',
     href: '/account-search',
     icon: UserSearch,
   },
@@ -60,17 +52,17 @@ const mainNavItems = [
     icon: Users,
   },
   {
+    title: 'AI Scripts',
+    href: '/ai-scripts',
+    icon: Sparkles,
+    badge: 'PRO',
+    badgeVariant: 'secondary' as const,
+  },
+  {
     title: 'Analytics',
     href: '/analytics',
     icon: BarChart3,
   },
-];
-
-const quickActions = [
-  { title: 'Viral Videos', href: '/discover?filter=viral', icon: Zap },
-  { title: 'Trending Hashtags', href: '/trending', icon: Target },
-  { title: 'Saved Scripts', href: '/saved', icon: Bookmark },
-  { title: 'Watch History', href: '/history', icon: History },
 ];
 
 const bottomNavItems = [
@@ -80,23 +72,24 @@ const bottomNavItems = [
 
 export function Sidebar({ open, onToggle }: SidebarProps) {
   const location = useLocation();
-  const [activeNiche, setActiveNiche] = useState('all');
 
-  const niches = [
-    { id: 'all', label: 'All', color: 'bg-gray-500' },
-    { id: 'entertainment', label: 'Entertainment', color: 'bg-purple-500' },
-    { id: 'education', label: 'Education', color: 'bg-blue-500' },
-    { id: 'lifestyle', label: 'Lifestyle', color: 'bg-green-500' },
-    { id: 'business', label: 'Business', color: 'bg-amber-500' },
-    { id: 'fashion', label: 'Fashion', color: 'bg-pink-500' },
-    { id: 'food', label: 'Food', color: 'bg-orange-500' },
-    { id: 'fitness', label: 'Fitness', color: 'bg-red-500' },
-  ];
+  // Mock user data - replace with real data from auth context
+  const user = {
+    name: 'Demo User',
+    email: 'demo@viraltrend.ai',
+    avatar: null,
+    plan: 'Free',
+    usage: {
+      current: 8,
+      limit: 10,
+      percentage: 80,
+    },
+  };
 
   return (
     <aside
       className={cn(
-        'hidden md:flex flex-col border-r bg-muted/30 transition-all duration-300',
+        'hidden md:flex flex-col border-r bg-background transition-all duration-300',
         open ? 'w-64' : 'w-16'
       )}
     >
@@ -104,10 +97,10 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
       <div className="flex h-16 items-center justify-between px-4 border-b">
         {open && (
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 text-white font-bold text-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 text-white font-bold text-sm shadow-lg">
               VT
             </div>
-            <span className="font-semibold">ViralTrend AI</span>
+            <span className="font-semibold text-foreground">ViralTrend AI</span>
           </div>
         )}
         <Button
@@ -116,12 +109,12 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
           onClick={onToggle}
           className={cn(!open && 'w-full justify-center')}
         >
-          {open ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <ChevronLeft className={cn('h-4 w-4 transition-transform', !open && 'rotate-180')} />
         </Button>
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 space-y-2 p-4 overflow-y-auto">
+      <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
         {mainNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.href;
@@ -131,107 +124,111 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
               key={item.href}
               to={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent',
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
                 isActive
-                  ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-600 dark:text-purple-400'
-                  : 'text-muted-foreground hover:text-foreground',
+                  ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
                 !open && 'justify-center'
               )}
             >
               <Icon className="h-5 w-5 flex-shrink-0" />
               {open && (
-                <span className="flex-1">{item.title}</span>
-              )}
-              {item.badge && open && (
-                <Badge variant="secondary" className="ml-auto text-xs">
-                  {item.badge}
-                </Badge>
+                <>
+                  <span className="flex-1">{item.title}</span>
+                  {item.badge && (
+                    <Badge
+                      variant={item.badgeVariant}
+                      className={cn(
+                        'ml-auto text-[10px] px-1.5 py-0',
+                        item.badge === 'NEW' && 'bg-green-500/10 text-green-600 border-green-500/20',
+                        item.badge === 'PRO' && 'bg-purple-500/10 text-purple-600 border-purple-500/20'
+                      )}
+                    >
+                      {item.badge}
+                    </Badge>
+                  )}
+                </>
               )}
             </NavLink>
           );
         })}
-
-        {/* Niches Filter */}
-        {open && (
-          <div className="pt-4">
-            <h3 className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Niches
-            </h3>
-            <div className="space-y-1">
-              {niches.map((niche) => (
-                <button
-                  key={niche.id}
-                  onClick={() => setActiveNiche(niche.id)}
-                  className={cn(
-                    'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
-                    activeNiche === niche.id
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                  )}
-                >
-                  <div className={cn('h-2 w-2 rounded-full', niche.color)} />
-                  <span>{niche.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Quick Actions */}
-        {open && (
-          <div className="pt-4">
-            <h3 className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Quick Actions
-            </h3>
-            <div className="space-y-1">
-              {quickActions.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.href}
-                    to={item.href}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all hover:bg-accent',
-                        isActive
-                          ? 'bg-accent text-accent-foreground'
-                          : 'text-muted-foreground hover:text-foreground'
-                      )
-                    }
-                  >
-                    <Icon className="h-4 w-4 flex-shrink-0" />
-                    <span>{item.title}</span>
-                  </NavLink>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </nav>
 
-      {/* Bottom Navigation */}
-      <div className="border-t p-4 space-y-1">
-        {bottomNavItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.href;
+      {/* Bottom Section */}
+      <div className="border-t">
+        {/* Settings & Help */}
+        <div className="p-3 space-y-1">
+          {bottomNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.href;
 
-          return (
-            <NavLink
-              key={item.href}
-              to={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent',
-                isActive
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-                !open && 'justify-center'
-              )}
-            >
-              <Icon className="h-5 w-5 flex-shrink-0" />
-              {open && <span>{item.title}</span>}
-            </NavLink>
-          );
-        })}
+            return (
+              <NavLink
+                key={item.href}
+                to={item.href}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                  isActive
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                  !open && 'justify-center'
+                )}
+              >
+                <Icon className="h-5 w-5 flex-shrink-0" />
+                {open && <span>{item.title}</span>}
+              </NavLink>
+            );
+          })}
+        </div>
+
+        {/* Upgrade Card */}
+        {open && (
+          <div className="p-3 pt-0">
+            <div className="rounded-lg border bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Crown className="h-4 w-4 text-purple-600" />
+                <span className="text-sm font-semibold text-foreground">
+                  {user.plan} Plan
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    {user.usage.current}/{user.usage.limit} searches used
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {user.usage.percentage}%
+                  </span>
+                </div>
+                <Progress value={user.usage.percentage} className="h-2" />
+              </div>
+
+              <Button
+                size="sm"
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-md"
+              >
+                Upgrade
+                <ArrowUpRight className="ml-1 h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* User Profile */}
+        {open && (
+          <div className="p-3 pt-0 border-t">
+            <button className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-accent transition-all">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-pink-600 text-white font-medium text-xs">
+                {user.name.split(' ').map(n => n[0]).join('')}
+              </div>
+              <div className="flex-1 text-left overflow-hidden">
+                <p className="font-medium text-foreground truncate">{user.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              </div>
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );
