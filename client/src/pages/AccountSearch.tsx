@@ -3,7 +3,7 @@ import { Search, Users, UserPlus, TrendingUp, Eye, Video, BarChart3, Loader2 } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { apiService } from '@/services/api';
 import type { ProfileReport } from '@/types';

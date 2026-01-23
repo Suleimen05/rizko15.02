@@ -68,11 +68,6 @@ const mainNavItems = [
   },
 ];
 
-const bottomNavItems = [
-  { title: 'Settings', href: '/settings', icon: Settings },
-  { title: 'Help', href: '/help', icon: HelpCircle },
-];
-
 export function Sidebar({ open, onToggle }: SidebarProps) {
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);

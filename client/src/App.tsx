@@ -72,7 +72,6 @@ function AppContent() {
 
 function App() {
   const {
-    user,
     login,
     addNotification,
   } = useAppState();
