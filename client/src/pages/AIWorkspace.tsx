@@ -8,9 +8,7 @@ import {
   Lightbulb,
   TrendingUp,
   Wand2,
-  Clock,
   Star,
-  Trash2,
   Copy,
   Download,
   Settings,
@@ -21,7 +19,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { ChatMessage, ChatConversation, QuickAction } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
@@ -91,12 +88,12 @@ const popularPrompts = [
 
 export function AIWorkspace() {
   const { user } = useAuth();
-  const [conversations, setConversations] = useState<ChatConversation[]>(mockConversations);
+  const [conversations] = useState<ChatConversation[]>(mockConversations);
   const [activeConversation, setActiveConversation] = useState<ChatConversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<'claude' | 'gemini'>('claude');
+  const [selectedModel] = useState<'claude' | 'gemini'>('claude');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -148,6 +145,7 @@ export function AIWorkspace() {
     setMessages([]);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const formatTime = (date: string) => {
     const d = new Date(date);
     const now = new Date();
