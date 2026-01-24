@@ -6,6 +6,7 @@ pgvector
 python-dotenv
 pydantic
 pydantic-settings
+email-validator
 requests
 apify-client
 numpy
