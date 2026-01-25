@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -7,6 +8,8 @@ import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
+import { MobileSidebar } from '@/components/MobileSidebar';
+import { UnifiedSidebar } from '@/components/UnifiedSidebar';
 import { Dashboard } from '@/pages/Dashboard';
 import { Trending } from '@/pages/Trending';
 import { Discover } from '@/pages/Discover';
@@ -51,15 +54,29 @@ function DashboardLayout() {
     toggleSidebar,
   } = useAppState();
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Toggle between old sidebar and new unified sidebar
+  // Change to 'A' or 'B' to test variants, or 'old' for original
+  const sidebarVariant = 'A' as const;
+  const useOldSidebar = false;
+
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
-      <Sidebar open={sidebarOpen} onToggle={toggleSidebar} />
+      {/* Desktop Sidebar */}
+      {useOldSidebar ? (
+        <Sidebar open={sidebarOpen} onToggle={toggleSidebar} />
+      ) : (
+        <UnifiedSidebar variant={sidebarVariant} />
+      )}
+
+      {/* Mobile Sidebar */}
+      <MobileSidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header - Mobile only */}
-        <Header onToggleSidebar={toggleSidebar} />
+        <Header onToggleSidebar={() => setMobileMenuOpen(true)} />
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto bg-muted/30">
