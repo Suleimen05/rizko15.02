@@ -19,6 +19,10 @@ import { Competitors } from '@/pages/Competitors';
 import { AccountSearch } from '@/pages/AccountSearch';
 import { SettingsPage } from '@/pages/Settings';
 import { Help } from '@/pages/Help';
+import { Pricing } from '@/pages/Pricing';
+import { UsagePolicy } from '@/pages/UsagePolicy';
+import { PrivacyPolicy } from '@/pages/PrivacyPolicy';
+import { Marketplace } from '@/pages/Marketplace';
 import { useAppState } from '@/hooks/useAppState';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -92,6 +96,10 @@ function DashboardLayout() {
               <Route path="/competitors" element={<Competitors />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/help" element={<Help />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/usage-policy" element={<UsagePolicy />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/marketplace" element={<Marketplace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </div>

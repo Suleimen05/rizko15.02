@@ -225,7 +225,7 @@ export function UnifiedSidebar({ variant }: UnifiedSidebarProps) {
                       if (item.modalType === 'publish') {
                         setShowPublishModal(true);
                       } else if (item.modalType === 'marketplace') {
-                        setShowMarketplaceModal(true);
+                        navigate('/dashboard/marketplace');
                       }
                     };
 
@@ -443,14 +443,16 @@ export function UnifiedSidebar({ variant }: UnifiedSidebarProps) {
 
             <div className="border-t my-1" />
 
-            <NavLink
-              to="/dashboard/pricing"
-              className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-accent transition-all"
-              onClick={() => setShowUserMenu(false)}
+            <button
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-accent transition-all"
+              onClick={() => {
+                setShowUserMenu(false);
+                navigate('/dashboard/pricing');
+              }}
             >
               <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
               <span>Upgrade plan</span>
-            </NavLink>
+            </button>
 
             <div className="relative">
               <button
@@ -482,7 +484,7 @@ export function UnifiedSidebar({ variant }: UnifiedSidebarProps) {
                     About
                   </NavLink>
                   <NavLink
-                    to="/usage-policy"
+                    to="/dashboard/usage-policy"
                     className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-accent transition-all"
                     onClick={() => {
                       setShowLearnMoreMenu(false);
@@ -492,7 +494,7 @@ export function UnifiedSidebar({ variant }: UnifiedSidebarProps) {
                     Usage policy
                   </NavLink>
                   <NavLink
-                    to="/privacy-policy"
+                    to="/dashboard/privacy-policy"
                     className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-accent transition-all"
                     onClick={() => {
                       setShowLearnMoreMenu(false);

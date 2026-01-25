@@ -75,7 +75,11 @@ export function Help() {
             <p className="text-sm text-muted-foreground mb-4">
               Chat with our support team for personalized help
             </p>
-            <Button variant="outline" className="w-full">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => window.open('https://t.me/+13215884561', '_blank')}
+            >
               Start Chat
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
@@ -91,7 +95,11 @@ export function Help() {
             <p className="text-sm text-muted-foreground mb-4">
               Send us an email and we'll get back to you within 24 hours
             </p>
-            <Button variant="outline" className="w-full">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => window.location.href = 'mailto:axislineX@gmail.com?subject=TrendScout Support'}
+            >
               Send Email
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
@@ -105,11 +113,10 @@ export function Help() {
             </div>
             <h3 className="font-semibold mb-2">Documentation</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Browse our comprehensive documentation and guides
+              Coming soon - we're working on comprehensive guides
             </p>
-            <Button variant="outline" className="w-full">
-              View Docs
-              <ArrowRight className="h-4 w-4 ml-2" />
+            <Button variant="outline" className="w-full" disabled>
+              Coming Soon
             </Button>
           </div>
         </Card>
