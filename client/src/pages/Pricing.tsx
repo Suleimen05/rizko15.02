@@ -31,15 +31,20 @@ interface PlanFeature {
 }
 
 const features: PlanFeature[] = [
+  { name: 'Light Analyze (basic metrics)', free: true, creator: true, pro: true, agency: true },
+  { name: 'Deep Analyze (6-layer UTS)', free: false, creator: false, pro: true, agency: true },
   { name: 'Daily trend views', free: '10', creator: 'Unlimited', pro: 'Unlimited', agency: 'Unlimited' },
-  { name: 'Deep Scan videos', free: false, creator: '100', pro: '500', agency: '2,000' },
-  { name: 'Trend forecasting', free: false, creator: true, pro: true, agency: true },
+  { name: 'Deep Scan videos per month', free: '0', creator: '100', pro: '500', agency: '2,000' },
+  { name: 'UTS Score breakdown', free: false, creator: false, pro: true, agency: true },
+  { name: 'Visual clustering (AI)', free: false, creator: false, pro: true, agency: true },
+  { name: 'Growth velocity tracking', free: false, creator: false, pro: true, agency: true },
+  { name: 'Saturation indicator', free: false, creator: false, pro: true, agency: true },
+  { name: 'Sound cascade analysis', free: false, creator: false, pro: true, agency: true },
+  { name: 'Auto-rescan (24h)', free: false, creator: false, pro: true, agency: true },
   { name: 'Historical data', free: false, creator: '7 days', pro: '30 days', agency: '90 days' },
   { name: 'Export data (CSV)', free: false, creator: true, pro: true, agency: true },
   { name: 'Daily searches', free: '10', creator: 'Unlimited', pro: 'Unlimited', agency: 'Unlimited' },
   { name: 'Advanced filters', free: false, creator: true, pro: true, agency: true },
-  { name: 'UTS Viral Score', free: false, creator: true, pro: true, agency: true },
-  { name: 'Visual clustering (AI)', free: false, creator: false, pro: true, agency: true },
   { name: 'AI scripts per month', free: '5', creator: '50', pro: 'Unlimited', agency: 'Unlimited' },
   { name: 'Choose AI model', free: false, creator: true, pro: true, agency: true },
   { name: 'All 5 generation modes', free: false, creator: true, pro: true, agency: true },
@@ -210,6 +215,7 @@ export function Pricing() {
                   <ul className="space-y-2">
                     {plan.id === 'free' && (
                       <>
+                        <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />Light Analyze (basic)</li>
                         <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />10 trend views/day</li>
                         <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />5 AI scripts/month</li>
                         <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />3 competitor tracking</li>
@@ -217,17 +223,17 @@ export function Pricing() {
                     )}
                     {plan.id === 'creator' && (
                       <>
-                        <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />Unlimited trends & searches</li>
+                        <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />Light Analyze (unlimited)</li>
                         <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />50 AI scripts/month</li>
                         <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" /><Mic className="h-3 w-3" /> 10 min Voice AI/day</li>
-                        <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />Deep Scan (100 videos)</li>
+                        <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />100 Deep Scans/month</li>
                       </>
                     )}
                     {plan.id === 'pro' && (
                       <>
+                        <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" /><Sparkles className="h-3 w-3" /> Deep Analyze (6-layer UTS)</li>
                         <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />Unlimited AI scripts</li>
                         <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" /><Mic className="h-3 w-3" /> 60 min Voice AI/day</li>
-                        <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />16 voice options</li>
                         <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />Visual clustering (AI)</li>
                         <li className="flex items-center gap-2 text-sm"><Check className="h-4 w-4 text-green-500" />Priority support</li>
                       </>

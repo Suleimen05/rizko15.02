@@ -75,9 +75,10 @@ class ApiService {
     mode?: 'keywords' | 'username';
     business_desc?: string;
     is_deep?: boolean;
+    user_tier?: string;
     time_window?: string;
     rescan_hours?: number;
-  }): Promise<{ status: string; items: Trend[] }> {
+  }): Promise<{ status: string; items: Trend[]; mode?: string; clusters?: any[] }> {
     try {
       const response = await apiClient.post('/trends/search', {
         target: params.target,
@@ -85,6 +86,7 @@ class ApiService {
         mode: params.mode || 'keywords',
         business_desc: params.business_desc || '',
         is_deep: params.is_deep || false,
+        user_tier: params.user_tier || 'free',
         time_window: params.time_window,
         rescan_hours: params.rescan_hours || 24,
       });

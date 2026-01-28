@@ -17,10 +17,27 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// DEV MODE - set to true for local development without auth
+const DEV_MODE = true;
+
+const DEV_USER: User = {
+  id: 'dev-user-123',
+  email: 'akylbek@trendscout.ai',
+  name: 'akylbek',
+  avatar: '',
+  subscription: 'pro',
+  credits: 999,
+  preferences: {
+    niches: ['entertainment', 'education'],
+    languages: ['en'],
+    regions: ['US'],
+  },
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(DEV_MODE ? DEV_USER : null);
+  const [isAuthenticated, setIsAuthenticated] = useState(DEV_MODE);
+  const [isLoading, setIsLoading] = useState(!DEV_MODE);
 
   // Convert Supabase user to our User type
   const convertToUser = (supabaseUser: SupabaseUser): User => {
@@ -29,7 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email: supabaseUser.email || '',
       name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
       avatar: supabaseUser.user_metadata?.avatar_url || '',
-      subscription: 'pro',
+      subscription: 'pro',  // Default to Pro for all users (change in production)
       credits: 150,
       preferences: {
         niches: ['entertainment', 'education'],
@@ -41,6 +58,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Check authentication status
   const checkAuth = async () => {
+    // Skip auth check in DEV mode
+    if (DEV_MODE) {
+      setUser(DEV_USER);
+      setIsAuthenticated(true);
+      setIsLoading(false);
+      return;
+    }
+    
     try {
       const { data: { session } } = await supabase.auth.getSession();
 
@@ -95,6 +120,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Login user
   const login = async (email: string, password: string): Promise<void> => {
+    // DEV MODE - instant login without Supabase
+    if (DEV_MODE) {
+      setUser(DEV_USER);
+      setIsAuthenticated(true);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
 
     try {

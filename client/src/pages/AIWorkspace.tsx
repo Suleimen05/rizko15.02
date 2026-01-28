@@ -110,14 +110,13 @@ const AutoIcon = () => (
   </svg>
 );
 
-// AI Models
+// AI Models - only Gemini is active, others coming soon
 const aiModels = [
-  { id: 'auto', name: 'Auto', icon: AutoIcon },
-  { id: 'claude', name: 'Sonnet 4.5', icon: ClaudeIcon },
-  { id: 'gpt4', name: 'GPT-5.1', icon: GPTIcon },
-  { id: 'gemini', name: 'Gemini 2.5', icon: GeminiIcon },
-  { id: 'grok', name: 'Grok 4', icon: GrokIcon },
-  { id: 'kimi', name: 'Kimi', icon: KimiIcon },
+  { id: 'gemini', name: 'Gemini 2.5', icon: GeminiIcon, available: true },
+  { id: 'claude', name: 'Sonnet 4.5', icon: ClaudeIcon, available: false, comingSoon: true },
+  { id: 'gpt4', name: 'GPT-5.1', icon: GPTIcon, available: false, comingSoon: true },
+  { id: 'grok', name: 'Grok 4', icon: GrokIcon, available: false, comingSoon: true },
+  { id: 'kimi', name: 'Kimi', icon: KimiIcon, available: false, comingSoon: true },
 ];
 
 // Content Modes
@@ -134,7 +133,7 @@ export function AIWorkspace() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(aiModels[0]);
+  const [selectedModel, setSelectedModel] = useState(aiModels.find(m => m.id === 'gemini') || aiModels[0]);
   const [selectedMode, setSelectedMode] = useState(contentModes[0]);
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showModeMenu, setShowModeMenu] = useState(false);
@@ -159,21 +158,56 @@ export function AIWorkspace() {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = inputValue;
     setInputValue('');
     setIsStreaming(true);
 
-    // Simulate AI response with streaming
-    setTimeout(() => {
+    try {
+      // Call backend API for Gemini
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const response = await fetch(`${API_URL}/ai-scripts/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: currentInput,
+          model: selectedModel.id,
+          mode: selectedMode.id,
+          history: messages.slice(-10).map(m => ({
+            role: m.role,
+            content: m.content
+          }))
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const data = await response.json();
+
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `Отличный вопрос! Вот что я могу предложить по теме "${inputValue}":\n\n1. **Hook (первые 3 секунды)**\n"Стоп! Вот что изменит ваш подход к созданию контента..."\n\n2. **Body (основная часть)**\n- Начните с проблемы, которую знает каждый\n- Покажите распространённую ошибку\n- Раскройте простой трюк, который работает\n- Продемонстрируйте результаты\n\n3. **Call to Action**\n"Попробуйте это в течение 7 дней и поделитесь результатами!"\n\n**Pro Tips:**\n- Используйте трендовый звук\n- Добавьте субтитры\n- Постите в пиковые часы\n\nХотите чтобы я развил какой-то из этих пунктов?`,
+        content: data.response || data.content || 'Sorry, I could not generate a response.',
         timestamp: new Date().toISOString(),
         isStreaming: false,
       };
       setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('AI chat error:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, there was an error connecting to the AI. Please try again.',
+        timestamp: new Date().toISOString(),
+        isStreaming: false,
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsStreaming(false);
-    }, 1500);
+    }
   };
 
   const handleQuickAction = (action: QuickAction) => {
@@ -380,18 +414,36 @@ export function AIWorkspace() {
                         </div>
                         {aiModels.map((model) => {
                           const IconComponent = model.icon;
+                          const isDisabled = !model.available;
                           return (
                             <button
                               key={model.id}
                               onClick={() => {
-                                setSelectedModel(model);
-                                setShowModelMenu(false);
+                                if (model.available) {
+                                  setSelectedModel(model);
+                                  setShowModelMenu(false);
+                                }
                               }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent transition-colors"
+                              disabled={isDisabled}
+                              className={cn(
+                                "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors",
+                                isDisabled
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "hover:bg-accent cursor-pointer"
+                              )}
                             >
-                              <IconComponent />
-                              <span className="flex-1 text-left">{model.name}</span>
-                              {selectedModel.id === model.id && (
+                              <span className={isDisabled ? "opacity-50" : ""}>
+                                <IconComponent />
+                              </span>
+                              <span className={cn("flex-1 text-left", isDisabled && "text-muted-foreground")}>
+                                {model.name}
+                              </span>
+                              {model.comingSoon && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
+                                  Soon
+                                </span>
+                              )}
+                              {selectedModel.id === model.id && model.available && (
                                 <Check className="h-4 w-4 text-purple-500" />
                               )}
                             </button>

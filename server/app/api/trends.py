@@ -24,7 +24,8 @@ class SearchRequest(BaseModel):
     keywords: Optional[List[str]] = []   # Для обратной совместимости
     mode: str = "keywords"               # "keywords" или "username"
     business_desc: Optional[str] = ""
-    is_deep: Optional[bool] = False
+    is_deep: Optional[bool] = False      # Light (False) vs Deep (True) Analyze
+    user_tier: str = Field(default="free")  # free, creator, pro, agency
     time_window: Optional[str] = None
     rescan_hours: int = Field(default=24, ge=1)
 
@@ -80,7 +81,12 @@ def get_saved_results(keyword: str, mode: str = "keywords", db: Session = Depend
 
 @router.post("/search")
 def search_trends(req: SearchRequest, db: Session = Depends(get_db)):
-    """Deep Scan + Auto Rescan Scheduler (Point A Setup)"""
+    """
+    Unified Search Endpoint with Light/Deep Analyze modes.
+    
+    Light Analyze (FREE/CREATOR): Basic metrics, fast results
+    Deep Analyze (PRO/AGENCY): 6-layer UTS, clustering, velocity, saturation
+    """
     try:
         search_targets = [req.target] if req.target else req.keywords
         if not search_targets or not search_targets[0]:
@@ -88,14 +94,35 @@ def search_trends(req: SearchRequest, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"❌ Error parsing request: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
+    
+    # ✅ ПРОВЕРКА ДОСТУПА К DEEP ANALYZE
+    if req.is_deep and req.user_tier not in ["pro", "agency"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "Deep Analyze requires Pro plan",
+                "upgrade_url": "/pricing",
+                "current_tier": req.user_tier,
+                "required_tier": "pro",
+                "features": [
+                    "6-Layer UTS Score breakdown",
+                    "Visual clustering (AI)",
+                    "Growth velocity prediction",
+                    "Saturation indicator",
+                    "Sound cascade analysis",
+                    "Auto-rescan (24h tracking)"
+                ]
+            }
+        )
 
-    print(f"🔎 API Search [{req.mode}]: {search_targets} (Deep: {req.is_deep})")
+    print(f"🔎 API Search [{req.mode}]: {search_targets} (Mode: {'DEEP' if req.is_deep else 'LIGHT'}, Tier: {req.user_tier})")
     
     collector = TikTokCollector()
     raw_items = []
     clean_items = []
     
-    # 1. Для обычного поиска (не deep) - сначала проверяем кэш
+    # 1. Для Light Analyze - проверяем кэш (быстрые результаты)
+    # Для Deep Analyze - ВСЕГДА пропускаем кэш (полный анализ)
     if not req.is_deep and req.mode != "username":
         limit = 20
         try:
@@ -115,11 +142,11 @@ def search_trends(req: SearchRequest, db: Session = Depends(get_db)):
                            if not t.last_scanned_at or 
                            (datetime.utcnow() - t.last_scanned_at) < timedelta(hours=1)]
             if recent_cached:
-                print(f"💾 Используем кэшированные данные ({len(recent_cached)} записей) - НЕ запускаем Apify")
-                return {"status": "ok", "items": [trend_to_dict(t) for t in recent_cached]}
+                print(f"💾 [LIGHT] Используем кэш ({len(recent_cached)} записей)")
+                return {"status": "ok", "mode": "light", "items": [trend_to_dict(t) for t in recent_cached]}
         
         # Кэша нет - запускаем Apify
-        print(f"🔄 Кэш не найден, запускаем Apify для поиска '{search_targets[0]}'...")
+        print(f"🔄 [LIGHT] Кэш не найден, запускаем Apify...")
         raw_items = collector.collect(search_targets, limit=limit, mode="search", is_deep=False)
         
         if not raw_items:
@@ -141,7 +168,8 @@ def search_trends(req: SearchRequest, db: Session = Depends(get_db)):
     
     elif req.is_deep:
         limit = 50
-        print(f"🔬 Deep Scan для '{search_targets[0]}'...")
+        print(f"🔬 [DEEP] Starting full analysis (no cache) для '{search_targets[0]}'...")
+        # ВАЖНО: Для Deep Analyze ВСЕГДА делаем полный парсинг (игнорируем кэш)
         raw_items = collector.collect(search_targets, limit=limit, mode="search", is_deep=req.is_deep)
         if not raw_items:
             return {"status": "empty", "items": []}
@@ -150,32 +178,32 @@ def search_trends(req: SearchRequest, db: Session = Depends(get_db)):
             v_count = int(item.get("views") or (item.get("stats") or {}).get("playCount") or 0)
             if v_count >= 5000: clean_items.append(item)
 
-    # --- ✅ РЕЖИМ 1: ТРЕНДЫ (ОБЫЧНЫЙ ПОИСК БЕЗ DEEP SCAN) ---
+    # --- ✅ РЕЖИМ 1: LIGHT ANALYZE (БЫСТРЫЙ ПОИСК БЕЗ ГЛУБОКОЙ МАТЕМАТИКИ) ---
     if not req.is_deep:
-        # Для обычного поиска возвращаем результаты без сохранения в БД
+        # Light Analyze: только базовые метрики, как у конкурентов
         live_results = []
         for idx, item in enumerate(clean_items):
-            # Debug: print first item structure
-            if idx == 0:
-                print(f"🔍 DEBUG: First item keys: {list(item.keys())}")
-                print(f"🔍 DEBUG: play_addr sources: v_meta.playAddr={bool((item.get('video') or {}).get('playAddr'))}, item.playAddr={bool(item.get('playAddr'))}")
-                print(f"🔍 DEBUG: URL: {item.get('webVideoUrl') or item.get('postPage') or item.get('url')}")
-
             # Пробуем разные варианты структуры данных от Apify
             v_meta = item.get("video") or item.get("videoMeta") or {}
             author_meta = item.get("author") or item.get("authorMeta") or item.get("channel") or {}
-            stats = item.get("stats") or {}
+            
+            # Debug: print first item structure
+            if idx == 0:
+                print(f"🔍 DEBUG: First item keys: {list(item.keys())}")
+                print(f"🔍 DEBUG: video keys: {list(v_meta.keys()) if v_meta else 'EMPTY'}")
+                print(f"🔍 DEBUG: channel/author keys: {list(author_meta.keys()) if author_meta else 'EMPTY'}")
+                print(f"🔍 DEBUG: likes={item.get('likes')}, comments={item.get('comments')}, shares={item.get('shares')}")
 
-            # Cover URL может быть в разных местах
-            cover_url = (
-                v_meta.get("cover") or
-                v_meta.get("coverUrl") or
-                v_meta.get("dynamicCover") or
-                item.get("coverUrl") or
-                item.get("cover") or
-                item.get("videoCover") or
-                ""
-            ).replace(".heic", ".jpeg").replace(".webp", ".jpeg")
+            # Cover URL - TikTok scraper returns it in video.cover or video.dynamicCover
+            cover_url = ""
+            if v_meta:
+                cover_url = v_meta.get("cover") or v_meta.get("coverUrl") or v_meta.get("dynamicCover") or ""
+            if not cover_url:
+                cover_url = item.get("coverUrl") or item.get("cover") or item.get("videoCover") or ""
+            cover_url = cover_url.replace(".heic", ".jpeg").replace(".webp", ".jpeg") if cover_url else ""
+            
+            if idx == 0:
+                print(f"🔍 DEBUG: cover_url = {cover_url[:80] if cover_url else 'EMPTY'}...")
 
             # URL видео
             video_url = (
@@ -212,18 +240,22 @@ def search_trends(req: SearchRequest, db: Session = Depends(get_db)):
                 "unknown"
             )
 
-            # Stats
+            # Stats - TikTok scraper returns them directly in item (views, likes, comments, shares)
+            # NOT in item.stats!
+            stats = item.get("stats") or {}
+            
             play_count = (
+                item.get("views") or  # Direct from Apify - PRIORITY
                 stats.get("playCount") or
                 stats.get("views") or
-                item.get("views") or
                 item.get("playCount") or
                 0
             )
 
-            digg_count = stats.get("diggCount") or stats.get("likes") or item.get("likes") or 0
-            comment_count = stats.get("commentCount") or stats.get("comments") or item.get("comments") or 0
-            share_count = stats.get("shareCount") or stats.get("shares") or item.get("shares") or 0
+            # Likes/comments/shares are DIRECTLY in item for Apify TikTok scraper
+            digg_count = item.get("likes") or stats.get("diggCount") or stats.get("likes") or 0
+            comment_count = item.get("comments") or stats.get("commentCount") or stats.get("comments") or 0
+            share_count = item.get("shares") or stats.get("shareCount") or stats.get("shares") or 0
 
             # Hashtags
             hashtags = item.get("hashtags") or item.get("challenges") or []
@@ -267,6 +299,10 @@ def search_trends(req: SearchRequest, db: Session = Depends(get_db)):
                 "verified": author_meta.get("verified", False)
             }
 
+            # Простой Viral Score для Light режима (без UTS математики)
+            engagement_rate = round((int(digg_count) + int(comment_count) + int(share_count)) / max(int(play_count), 1) * 100, 2) if play_count > 0 else 0
+            simple_viral_score = min(engagement_rate * 10, 100)  # 0-100 scale
+            
             live_results.append({
                 "id": str(item.get("id", "")),
                 "title": description,
@@ -292,69 +328,206 @@ def search_trends(req: SearchRequest, db: Session = Depends(get_db)):
                 "music": music_info,
                 "hashtags": hashtags_list,
                 "createdAt": item.get("createTime") or item.get("createTimeISO", ""),
-                "uts_score": 0,  # Will be calculated later if needed
-                "viralScore": 0,
-                "engagementRate": round((int(digg_count) + int(comment_count) + int(share_count)) / max(int(play_count), 1) * 100, 2) if play_count > 0 else 0
+                # Light Analyze: простые метрики
+                "viralScore": round(simple_viral_score, 1),
+                "engagementRate": engagement_rate
+                # НЕТ: uts_score, uts_breakdown, cluster_id, saturation_score, etc.
             })
 
         if len(live_results) > 0:
-            print(f"✅ Parsed {len(live_results)} items. First cover_url: {live_results[0]['cover_url'][:50] if live_results[0]['cover_url'] else 'EMPTY'}")
+            print(f"✅ [LIGHT MODE] Parsed {len(live_results)} items. First cover_url: {live_results[0]['cover_url'][:50] if live_results[0]['cover_url'] else 'EMPTY'}")
 
-        return {"status": "ok", "items": live_results}
+        return {
+            "status": "ok", 
+            "mode": "light",
+            "items": live_results
+        }
 
-    # --- ✅ РЕЖИМ 2: DEEP SCAN (ИСПОЛЬЗУЕМ ВРЕМЕННЫЙ БУФЕР БД) ---
+    # --- ✅ РЕЖИМ 2: DEEP ANALYZE (ПОЛНАЯ МАТЕМАТИКА + ML) ---
     scorer = TrendScorer()
     processed_trends_objects = [] 
     cascade_total = len(clean_items)
+    
+    # Подсчет cascade_count для каждого звука
+    music_cascade_map = {}
+    for item in clean_items:
+        music_id = (item.get("music") or {}).get("id") or (item.get("musicMeta") or {}).get("id")
+        if music_id:
+            music_cascade_map[str(music_id)] = music_cascade_map.get(str(music_id), 0) + 1
 
     for item in clean_items:
         p_id = str(item.get("id"))
         video_url = item.get("postPage") or item.get("url") or item.get("webVideoUrl")
         views_now = int(item.get("views") or (item.get("stats") or {}).get("playCount") or 0)
-        current_stats = {"playCount": views_now}
+        
+        # Извлекаем данные для UTS расчета - Apify returns stats directly in item!
+        author_meta = item.get("author") or item.get("authorMeta") or item.get("channel") or {}
+        stats = item.get("stats") or {}
+        
+        # Stats from item directly (Apify format) or from stats object
+        likes = item.get("likes") or stats.get("diggCount") or stats.get("likes") or 0
+        comments = item.get("comments") or stats.get("commentCount") or stats.get("comments") or 0
+        shares = item.get("shares") or stats.get("shareCount") or stats.get("shares") or 0
+        bookmarks = item.get("bookmarks") or stats.get("collectCount") or stats.get("saveCount") or 0
+        
+        current_stats = {
+            "playCount": views_now,
+            "diggCount": int(likes),
+            "commentCount": int(comments),
+            "shareCount": int(shares)
+        }
+        
+        followers = author_meta.get("fans") or author_meta.get("followers") or 1
+        music_id = (item.get("music") or item.get("song") or {}).get("id") or (item.get("musicMeta") or {}).get("id")
+        cascade_count = music_cascade_map.get(str(music_id), 1) if music_id else 1
 
         existing_video = db.query(Trend).filter(or_(Trend.platform_id == p_id, Trend.url == video_url)).first()
 
         try:
+            # Расчет UTS breakdown для Deep Analyze
+            # Ensure all values are integers, not None
+            uts_data = {
+                'views': int(views_now or 0),
+                'author_followers': int(followers or 1),
+                'collect_count': int(bookmarks or 0),
+                'share_count': int(shares or 0),
+                'likes': int(likes or 0),
+                'comments': int(comments or 0)
+            }
+            history_data = None
+            if existing_video and existing_video.initial_stats:
+                history_data = {
+                    'play_count': existing_video.initial_stats.get('playCount', views_now)
+                }
+            
+            uts_breakdown = scorer.calculate_uts_breakdown(uts_data, history_data, cascade_count)
+            
             if existing_video:
                 # ✅ Сброс Точки А при новом сканировании (храним временно для сверки)
                 existing_video.initial_stats = current_stats 
                 existing_video.stats = current_stats
+                existing_video.uts_score = uts_breakdown['final_score']
                 existing_video.last_scanned_at = None # Обнуляем, чтобы рескан поставил новую метку
                 db.add(existing_video)
                 processed_trends_objects.append(existing_video)
             else:
                 # Создаем новую запись «буфера»
+                # Cover URL - check multiple locations
+                v_meta = item.get("video") or item.get("videoMeta") or {}
+                cover_url = (
+                    v_meta.get("cover") or 
+                    v_meta.get("coverUrl") or 
+                    v_meta.get("dynamicCover") or 
+                    item.get("coverUrl") or 
+                    item.get("cover") or 
+                    ""
+                ).replace(".heic", ".jpeg").replace(".webp", ".jpeg")
+                
                 new_trend = Trend(
                     platform_id=p_id, url=video_url, 
-                    cover_url=(item.get("video", {}).get("coverUrl") or "").replace(".heic", ".jpeg"),
-                    description=item.get("title") or "No desc",
+                    cover_url=cover_url,
+                    description=item.get("title") or item.get("desc") or "No desc",
                     stats=current_stats, initial_stats=current_stats,
-                    author_username=(item.get("channel") or {}).get("username") or "unknown",
-                    uts_score=0, vertical=search_targets[0] or "deep_scan",
+                    author_username=(item.get("channel") or {}).get("username") or author_meta.get("uniqueId") or "unknown",
+                    uts_score=uts_breakdown['final_score'], 
+                    vertical=search_targets[0] or "deep_scan",
+                    music_id=str(music_id) if music_id else None,
                     last_scanned_at=None
                 )
                 db.add(new_trend)
                 processed_trends_objects.append(new_trend)
             db.commit()
-        except: db.rollback()
+        except Exception as e:
+            print(f"⚠️ Error processing video {p_id}: {e}")
+            db.rollback()
 
-    # 3. КЛАСТЕРИЗАЦИЯ (Только для Deep Scan)
+    # 3. КЛАСТЕРИЗАЦИЯ (Только для Deep Analyze)
     if req.is_deep and processed_trends_objects:
+        print(f"🧩 Starting visual clustering for {len(processed_trends_objects)} videos...")
         processed_trends_objects = cluster_trends_by_visuals(processed_trends_objects)
         for t in processed_trends_objects: db.add(t)
         try: db.commit()
         except: db.rollback()
 
-    # 4. ПЛАНИРОВАНИЕ СВЕРКИ (2 МИНУТЫ ТЕСТ)
+    # 4. ПЛАНИРОВАНИЕ СВЕРКИ (24 часа для velocity tracking)
     if req.is_deep and processed_trends_objects:
         saved_urls = [t.url for t in processed_trends_objects if t.url]
         if saved_urls:
-            run_date = datetime.now() + timedelta(minutes=2) 
+            run_date = datetime.now() + timedelta(hours=req.rescan_hours) 
             scheduler.add_job(
                 rescan_videos_task, 'date', run_date=run_date, 
                 args=[saved_urls, f"batch_{int(time.time())}"]
             )
-            print(f"⏱️ ЗАДАЧА СВЕРКИ ОТПРАВЛЕНА: Запуск через 2 минуты.")
+            print(f"⏱️ AUTO-RESCAN SCHEDULED: Will run in {req.rescan_hours} hours for velocity tracking.")
+    
+    # 5. Формируем расширенный ответ с UTS breakdown
+    deep_results = []
+    for trend in processed_trends_objects:
+        trend_dict = trend_to_dict(trend)
+        
+        # Пересчитываем breakdown для ответа (с актуальными данными из stats)
+        uts_data = {
+            'views': trend.stats.get('playCount', 0),
+            'author_followers': trend.author_followers or 1,
+            'collect_count': trend.stats.get('collectCount', 0) or trend.stats.get('saveCount', 0),
+            'share_count': trend.stats.get('shareCount', 0),
+            'likes': trend.stats.get('diggCount', 0),
+            'comments': trend.stats.get('commentCount', 0)
+        }
+        history_data = None
+        if trend.initial_stats:
+            history_data = {'play_count': trend.initial_stats.get('playCount', 0)}
+        
+        music_id_str = str(trend.music_id) if trend.music_id else None
+        cascade_count = music_cascade_map.get(music_id_str, 1) if music_id_str else 1
+        
+        uts_breakdown = scorer.calculate_uts_breakdown(uts_data, history_data, cascade_count)
+        
+        # Добавляем Deep Analyze поля
+        trend_dict['uts_breakdown'] = {
+            'l1_viral_lift': uts_breakdown['l1_viral_lift'],
+            'l2_velocity': uts_breakdown['l2_velocity'],
+            'l3_retention': uts_breakdown['l3_retention'],
+            'l4_cascade': uts_breakdown['l4_cascade'],
+            'l5_saturation': uts_breakdown['l5_saturation'],
+            'l7_stability': uts_breakdown['l7_stability'],
+            'final_score': uts_breakdown['final_score']
+        }
+        trend_dict['saturation_score'] = uts_breakdown['l5_saturation']
+        trend_dict['cascade_count'] = cascade_count
+        trend_dict['cascade_score'] = uts_breakdown['l4_cascade']
+        trend_dict['velocity_score'] = uts_breakdown['l2_velocity']
+        
+        deep_results.append(trend_dict)
+    
+    # Группировка по кластерам
+    clusters_info = {}
+    for trend in processed_trends_objects:
+        if trend.cluster_id is not None and trend.cluster_id >= 0:
+            if trend.cluster_id not in clusters_info:
+                clusters_info[trend.cluster_id] = {
+                    'cluster_id': trend.cluster_id,
+                    'video_count': 0,
+                    'total_uts': 0,
+                    'videos': []
+                }
+            clusters_info[trend.cluster_id]['video_count'] += 1
+            clusters_info[trend.cluster_id]['total_uts'] += trend.uts_score
+            clusters_info[trend.cluster_id]['videos'].append(trend.platform_id)
+    
+    clusters_list = []
+    for cluster_id, info in clusters_info.items():
+        clusters_list.append({
+            'cluster_id': cluster_id,
+            'video_count': info['video_count'],
+            'avg_uts': round(info['total_uts'] / info['video_count'], 2) if info['video_count'] > 0 else 0
+        })
+    
+    print(f"✅ [DEEP MODE] Processed {len(deep_results)} items with full UTS breakdown. Clusters: {len(clusters_list)}")
 
-    return {"status": "ok", "items": [trend_to_dict(t) for t in processed_trends_objects]}
+    return {
+        "status": "ok",
+        "mode": "deep",
+        "items": deep_results,
+        "clusters": clusters_list
+    }

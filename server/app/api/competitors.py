@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -10,6 +10,20 @@ from ..services.collector import TikTokCollector
 from ..services.scorer import TrendScorer
 
 router = APIRouter()
+
+# DEV MODE - для локальной разработки без auth
+DEV_MODE = True
+DEV_USER_ID = "dev-user-123"
+
+def get_user_id(x_user_id: Optional[str] = Header(None)) -> str:
+    """
+    Получает user_id из заголовка или использует DEV user_id
+    """
+    if DEV_MODE:
+        return x_user_id or DEV_USER_ID
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="User ID required")
+    return x_user_id
 
 # --- PYDANTIC SCHEMAS ---
 class CompetitorCreate(BaseModel):
@@ -83,18 +97,62 @@ def normalize_video_data(item: dict) -> dict:
 
 # --- API ENDPOINTS ---
 
+class ChannelSearchResult(BaseModel):
+    username: str
+    nickname: str
+    avatar: str
+    follower_count: int
+    video_count: int
+    platform: str = "tiktok"
+
+@router.get("/search/{username}")
+def search_channel(username: str):
+    """
+    Поиск канала по username (без добавления в БД).
+    Возвращает базовую информацию для превью.
+    """
+    clean_username = username.lower().strip().replace("@", "")
+    
+    print(f"🔍 Searching channel: @{clean_username}...")
+    collector = TikTokCollector()
+    raw_videos = collector.collect([clean_username], limit=5, mode="profile")
+    
+    if not raw_videos:
+        raise HTTPException(status_code=404, detail=f"Channel @{clean_username} not found")
+    
+    # Берем данные из первого видео
+    first_vid = normalize_video_data(raw_videos[0])
+    author_info = first_vid["author"]
+    
+    return ChannelSearchResult(
+        username=clean_username,
+        nickname=author_info["username"],
+        avatar=author_info["avatar"] or "",
+        follower_count=author_info["followers"],
+        video_count=len(raw_videos),
+        platform="tiktok"
+    )
+
+
 @router.post("/", response_model=CompetitorResponse)
-def add_competitor(data: CompetitorCreate, db: Session = Depends(get_db)):
+def add_competitor(
+    data: CompetitorCreate, 
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id)
+):
     """
     Добавить нового конкурента для отслеживания.
     Автоматически парсит его профиль и собирает метрики.
     """
     clean_username = data.username.lower().strip().replace("@", "")
 
-    # Проверяем, не добавлен ли уже
-    existing = db.query(Competitor).filter(Competitor.username == clean_username).first()
+    # Проверяем, не добавлен ли уже этим пользователем
+    existing = db.query(Competitor).filter(
+        Competitor.user_id == user_id,
+        Competitor.username == clean_username
+    ).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Competitor @{clean_username} already exists")
+        raise HTTPException(status_code=400, detail=f"Competitor @{clean_username} already in your list")
 
     # Парсим профиль через TikTok Collector
     print(f"🔍 Adding competitor: @{clean_username}...")
@@ -141,6 +199,7 @@ def add_competitor(data: CompetitorCreate, db: Session = Depends(get_db)):
 
     # Создаем запись в БД
     competitor = Competitor(
+        user_id=user_id,  # Добавляем user_id
         username=clean_username,
         display_name=author_info["username"],
         avatar_url=author_info["avatar"],
@@ -167,21 +226,34 @@ def add_competitor(data: CompetitorCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=List[CompetitorResponse])
-def get_all_competitors(db: Session = Depends(get_db)):
+def get_all_competitors(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id)
+):
     """
-    Получить список всех отслеживаемых конкурентов.
+    Получить список всех отслеживаемых конкурентов текущего пользователя.
     """
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    competitors = db.query(Competitor).filter(
+        Competitor.user_id == user_id,
+        Competitor.is_active == True
+    ).all()
     return competitors
 
 
 @router.get("/{username}", response_model=CompetitorResponse)
-def get_competitor(username: str, db: Session = Depends(get_db)):
+def get_competitor(
+    username: str, 
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id)
+):
     """
     Получить детальную информацию о конкуренте.
     """
     clean_username = username.lower().strip().replace("@", "")
-    competitor = db.query(Competitor).filter(Competitor.username == clean_username).first()
+    competitor = db.query(Competitor).filter(
+        Competitor.user_id == user_id,
+        Competitor.username == clean_username
+    ).first()
 
     if not competitor:
         raise HTTPException(status_code=404, detail=f"Competitor @{clean_username} not found")
@@ -190,12 +262,19 @@ def get_competitor(username: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{username}")
-def delete_competitor(username: str, db: Session = Depends(get_db)):
+def delete_competitor(
+    username: str, 
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id)
+):
     """
     Удалить конкурента из отслеживания (soft delete - помечаем как неактивного).
     """
     clean_username = username.lower().strip().replace("@", "")
-    competitor = db.query(Competitor).filter(Competitor.username == clean_username).first()
+    competitor = db.query(Competitor).filter(
+        Competitor.user_id == user_id,
+        Competitor.username == clean_username
+    ).first()
 
     if not competitor:
         raise HTTPException(status_code=404, detail=f"Competitor @{clean_username} not found")
@@ -207,12 +286,19 @@ def delete_competitor(username: str, db: Session = Depends(get_db)):
 
 
 @router.put("/{username}/refresh")
-def refresh_competitor_data(username: str, db: Session = Depends(get_db)):
+def refresh_competitor_data(
+    username: str, 
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id)
+):
     """
     Обновить данные конкурента (перепарсить профиль).
     """
     clean_username = username.lower().strip().replace("@", "")
-    competitor = db.query(Competitor).filter(Competitor.username == clean_username).first()
+    competitor = db.query(Competitor).filter(
+        Competitor.user_id == user_id,
+        Competitor.username == clean_username
+    ).first()
 
     if not competitor:
         raise HTTPException(status_code=404, detail=f"Competitor @{clean_username} not found")
@@ -268,14 +354,21 @@ def refresh_competitor_data(username: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{username}/spy")
-def spy_competitor(username: str, db: Session = Depends(get_db)):
+def spy_competitor(
+    username: str, 
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_user_id)
+):
     """
     Spy Mode: Детальный анализ конкурента с топ видео и последней лентой.
     """
     clean_username = username.lower().strip().replace("@", "")
 
     # Пробуем найти в таблице Competitor
-    competitor = db.query(Competitor).filter(Competitor.username == clean_username).first()
+    competitor = db.query(Competitor).filter(
+        Competitor.user_id == user_id,
+        Competitor.username == clean_username
+    ).first()
 
     if not competitor or not competitor.recent_videos:
         # Если нет в Competitor, пробуем ProfileData (legacy)

@@ -242,7 +242,7 @@ export interface User {
   email: string;
   name: string;
   avatar?: string;
-  subscription: 'free' | 'pro' | 'enterprise';
+  subscription: SubscriptionTier;
   credits: number;
   preferences: {
     niches: string[];
@@ -324,4 +324,65 @@ export interface PromptTemplate {
   prompt: string;
   category: string;
   variables: string[];
+}
+
+// ==================== DEEP ANALYZE TYPES ====================
+
+// UTS Breakdown (6 layers)
+export interface UTSBreakdown {
+  l1_viral_lift: number;      // 0.0 - 1.0 (30% weight)
+  l2_velocity: number;        // 0.0 - 1.0 (20% weight)
+  l3_retention: number;       // 0.0 - 1.0 (20% weight)
+  l4_cascade: number;         // 0.0 - 1.0 (15% weight)
+  l5_saturation: number;      // 0.0 - 1.0 (10% weight)
+  l7_stability: number;       // 0.0 - 1.0 (5% weight)
+  final_score: number;        // 0.0 - 10.0 (weighted sum)
+}
+
+// Cluster Information
+export interface ClusterInfo {
+  cluster_id: number;         // -1 = noise/unique, 0+ = cluster ID
+  video_count: number;        // How many videos in this cluster
+  avg_uts: number;            // Average UTS score of cluster
+  similar_videos?: TikTokVideo[];  // Other videos in same cluster
+}
+
+// Analysis Mode
+export type AnalysisMode = 'light' | 'deep';
+
+// User Subscription Tier
+export type SubscriptionTier = 'free' | 'creator' | 'pro' | 'agency';
+
+// Extended TikTokVideo with Deep Analyze fields
+export interface TikTokVideoDeep extends TikTokVideo {
+  // Deep Analyze exclusive fields
+  uts_breakdown?: UTSBreakdown;
+  cluster_info?: ClusterInfo;
+  saturation_score?: number;    // Same as uts_breakdown.l5_saturation
+  cascade_count?: number;       // Number of videos using this sound
+  cascade_score?: number;       // Same as uts_breakdown.l4_cascade
+  velocity_score?: number;      // Same as uts_breakdown.l2_velocity
+  initial_stats?: {             // For velocity calculation
+    playCount: number;
+    diggCount?: number;
+    timestamp?: string;
+  };
+}
+
+// Search Response with mode
+export interface SearchResponse {
+  status: 'ok' | 'error' | 'empty';
+  mode: AnalysisMode;
+  items: TikTokVideo[] | TikTokVideoDeep[];
+  clusters?: ClusterInfo[];     // Only present in deep mode
+  message?: string;
+}
+
+// Upgrade Required Error
+export interface UpgradeRequiredError {
+  error: string;
+  upgrade_url: string;
+  current_tier: SubscriptionTier;
+  required_tier: SubscriptionTier;
+  features: string[];          // List of features user is missing
 }

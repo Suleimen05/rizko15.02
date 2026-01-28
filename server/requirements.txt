@@ -8,6 +8,7 @@ pydantic
 pydantic-settings
 email-validator
 requests
+httpx
 apify-client
 numpy
 scikit-learn

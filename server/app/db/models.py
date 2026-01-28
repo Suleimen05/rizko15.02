@@ -1,6 +1,6 @@
 # backend/app/db/models.py
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, Text, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Text, DateTime, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
@@ -212,11 +212,13 @@ class Competitor(Base):
     """
     Таблица для отслеживания конкурентов.
     Сюда добавляются TikTok профили конкурентов для анализа.
+    Каждый пользователь имеет свой список competitors.
     """
     __tablename__ = "competitors"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)  # TikTok username
+    user_id = Column(String, nullable=False, index=True)  # User ID from auth
+    username = Column(String, index=True)  # TikTok username
 
     # Основная информация
     display_name = Column(String)                       # Отображаемое имя
@@ -247,3 +249,8 @@ class Competitor(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     notes = Column(Text)                                # Заметки о конкуренте
+    
+    # Unique constraint: каждый пользователь может добавить канал только один раз
+    __table_args__ = (
+        UniqueConstraint('user_id', 'username', name='uix_user_username'),
+    )

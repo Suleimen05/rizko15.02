@@ -5,6 +5,7 @@ import httpx
 
 router = APIRouter()
 
+
 @router.get("/image")
 async def proxy_image(url: str):
     """

@@ -228,14 +228,23 @@ export function useDashboard() {
   return { stats, loading, error };
 }
 
-export function useSearchWithFilters(filters: SearchFilters) {
+export function useSearchWithFilters(filters: SearchFilters & { 
+  is_deep?: boolean; 
+  user_tier?: string;
+}) {
   const [videos, setVideos] = useState<TikTokVideo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<string>('light');
+  const [clusters, setClusters] = useState<any[]>([]);
 
-  const search = useCallback(async () => {
+  // search принимает keyword напрямую чтобы избежать race condition с React state
+  const search = useCallback(async (keyword?: string) => {
+    // Используем переданный keyword или берём из filters.niche
+    const searchTerm = keyword || filters.niche;
+    
     // Don't search if no keyword/niche provided
-    if (!filters.niche || !filters.niche.trim()) {
+    if (!searchTerm || !searchTerm.trim()) {
       setVideos([]);
       return;
     }
@@ -244,15 +253,20 @@ export function useSearchWithFilters(filters: SearchFilters) {
       setLoading(true);
       setError(null);
 
-      // Use backend API for search
+      // Use backend API for search with Light/Deep mode
+      // NO artificial delays - show real progress only
       const result = await apiService.searchTrends({
-        target: filters.niche,
+        target: searchTerm,
         mode: 'keywords',
-        is_deep: false,
+        is_deep: filters.is_deep || false,
+        user_tier: filters.user_tier || 'pro',
       });
+      
+      setMode(result.mode || 'light');
+      setClusters(result.clusters || []);
 
-      // Convert trends to TikTokVideos
-      const converted = result.items.map(trend => ({
+      // Convert trends to TikTokVideos (with Deep Analyze fields if available)
+      const converted = result.items.map((trend: any) => ({
         id: trend.platform_id || String(trend.id),
         title: trend.description || 'No description',
         description: trend.description || '',
@@ -272,7 +286,7 @@ export function useSearchWithFilters(filters: SearchFilters) {
           diggCount: trend.stats?.diggCount || 0,
           shareCount: trend.stats?.shareCount || 0,
           commentCount: trend.stats?.commentCount || 0,
-          saveCount: 0,
+          saveCount: trend.stats?.saveCount || 0,
         },
         video: {
           duration: 0,
@@ -290,11 +304,20 @@ export function useSearchWithFilters(filters: SearchFilters) {
         },
         hashtags: [],
         createdAt: new Date().toISOString(),
-        viralScore: trend.uts_score,
-        uts_score: trend.uts_score,
+        // Light mode returns viralScore, Deep mode returns uts_score
+        viralScore: trend.viralScore || trend.uts_score || 0,
+        uts_score: trend.uts_score || trend.viralScore || 0,
+        engagementRate: trend.engagementRate || 0,
         cover_url: trend.cover_url,
         url: trend.url,
         author_username: trend.author_username,
+        // ✅ DEEP ANALYZE FIELDS (only present in deep mode)
+        uts_breakdown: trend.uts_breakdown || null,
+        saturation_score: trend.saturation_score,
+        cascade_count: trend.cascade_count,
+        cascade_score: trend.cascade_score,
+        velocity_score: trend.velocity_score,
+        cluster_id: trend.cluster_id,
       }));
 
       let filtered = [...converted];
@@ -323,17 +346,23 @@ export function useSearchWithFilters(filters: SearchFilters) {
       }
 
       setVideos(filtered);
-    } catch (err) {
+      return filtered; // Return results for saving to history
+    } catch (err: any) {
+      if (err.isUpgradeRequired) {
+        // Let the component handle upgrade modal
+        throw err;
+      }
       setError(err instanceof Error ? err.message : 'Search failed');
+      return [];
     } finally {
       setLoading(false);
     }
-  }, [filters.niche, filters.sortBy, filters.dateRange, filters.minViews, filters.maxViews, filters.minDuration, filters.maxDuration]);
+  }, [filters.niche, filters.sortBy, filters.dateRange, filters.minViews, filters.maxViews, filters.minDuration, filters.maxDuration, filters.is_deep, filters.user_tier]);
 
   // REMOVED auto-search on mount to prevent infinite loop
   // Users must click "Search" or "Apply Filters" button
 
-  return { videos, loading, error, refetch: search };
+  return { videos, loading, error, mode, clusters, refetch: search };
 }
 
 // New hook for Deep Scan (using backend API)

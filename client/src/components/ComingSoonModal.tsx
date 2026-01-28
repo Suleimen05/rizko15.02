@@ -58,17 +58,12 @@ export function ComingSoonModal({ isOpen, onClose, type }: ComingSoonModalProps)
           feature: type
         }]);
 
-      if (supabaseError) {
-        console.log('Interest recorded:', { feature: type, user: user?.email });
-        console.log('Supabase note:', supabaseError.message);
-      }
-
-      // Save to localStorage
+      // Save to localStorage regardless of Supabase result
       localStorage.setItem(`${STORAGE_KEY_PREFIX}${type}`, 'true');
       setIsInterested(true);
       setJustSubmitted(true);
-    } catch (err) {
-      console.log('Interest recorded:', { feature: type, user: user?.email });
+    } catch {
+      // Fallback to localStorage
       localStorage.setItem(`${STORAGE_KEY_PREFIX}${type}`, 'true');
       setIsInterested(true);
       setJustSubmitted(true);

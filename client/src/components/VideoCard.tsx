@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { Play, Heart, MessageCircle, Share2, Eye, Bookmark, Sparkles, TrendingUp, Music, ExternalLink, Info, Flame, Copy, Wand2, Loader2, Check } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Play, Heart, MessageCircle, Share2, Eye, Bookmark, Sparkles, TrendingUp, Music, ExternalLink, Info, Flame, Copy, Wand2, Loader2, Check, Lock, ArrowRight, Bot, Send, User } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
@@ -10,11 +12,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import type { TikTokVideo } from '@/types';
+import { UTSBreakdown } from '@/components/metrics/UTSBreakdown';
+import { UpgradeModal } from '@/components/UpgradeModal';
+// TikTok Embed - официальное легальное решение
+import type { TikTokVideo, TikTokVideoDeep, AnalysisMode } from '@/types';
 import { useAIScriptGenerator } from '@/hooks/useTikTok';
 
 interface VideoCardProps {
-  video: TikTokVideo;
+  video: TikTokVideo | TikTokVideoDeep;
+  mode?: AnalysisMode;
+  showUpgradePrompt?: boolean;
   onGenerateScript?: (video: TikTokVideo) => void;
   onSave?: (video: TikTokVideo) => void;
   showStats?: boolean;
@@ -23,6 +30,8 @@ interface VideoCardProps {
 
 export function VideoCard({
   video,
+  mode = 'light',
+  showUpgradePrompt = false,
   onGenerateScript,
   onSave,
   showStats = true,
@@ -33,9 +42,73 @@ export function VideoCard({
   const [isSaved, setIsSaved] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showDeepMetrics, setShowDeepMetrics] = useState(false);
+  
+  // AI Chat state
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // AI Script Generator hook
   const { script, loading: scriptLoading, error: scriptError, generate } = useAIScriptGenerator();
+  
+  // Scroll to bottom of chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+  
+  // AI Chat function
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setChatLoading(true);
+    
+    try {
+      // Build context about the video
+      const videoContext = `
+Video: "${video.description || video.title}"
+Author: @${video.author?.uniqueId || video.author_username}
+Views: ${video.stats?.playCount?.toLocaleString() || 0}
+Likes: ${video.stats?.diggCount?.toLocaleString() || 0}
+Comments: ${video.stats?.commentCount?.toLocaleString() || 0}
+Shares: ${video.stats?.shareCount?.toLocaleString() || 0}
+UTS Score: ${video.uts_score || video.viralScore || 0}
+`.trim();
+
+      // Use the same API base URL as other endpoints
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const response = await fetch(`${apiUrl}/ai-scripts/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessage,
+          context: videoContext,
+          history: chatMessages.slice(-6) // Last 6 messages for context
+        })
+      });
+      
+      if (!response.ok) throw new Error('Failed to get AI response');
+      
+      const data = await response.json();
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+    } catch (error) {
+      setChatMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: 'Sorry, I encountered an error. Please try again.' 
+      }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+  
+  // Check if video has Deep Analyze data
+  const isDeepVideo = 'uts_breakdown' in video && mode === 'deep';
 
   const formatNumber = (num: number): string => {
     if (num >= 1000000) {
@@ -98,26 +171,22 @@ export function VideoCard({
   // Get direct video playback URL
   const playAddr = video.play_addr || video.video?.playAddr || '';
 
-  // Extract video ID for embedding (fallback)
-  const getVideoId = (url: string): string | null => {
-    if (!url || url === '#') return null;
-    const match = url.match(/\/video\/(\d+)/);
-    return match ? match[1] : null;
+  // Extract video ID for embedding
+  const getVideoId = (): string | null => {
+    // First try to use video.id directly (most reliable for TikTok embeds)
+    if (video.id && /^\d+$/.test(video.id)) {
+      return video.id;
+    }
+    // Fallback: try to extract from URL
+    if (videoUrl && videoUrl !== '#') {
+      const match = videoUrl.match(/\/video\/(\d+)/);
+      if (match) return match[1];
+    }
+    return null;
   };
 
-  const videoId = getVideoId(videoUrl);
+  const videoId = getVideoId();
 
-  // Debug logging when modal opens
-  if (showDetails) {
-    console.log('🎬 Video Modal Debug:', {
-      playAddr,
-      videoId,
-      videoUrl,
-      hasVideo: !!playAddr,
-      hasEmbed: !!videoId,
-      coverImage
-    });
-  }
 
   return (
     <>
@@ -137,29 +206,33 @@ export function VideoCard({
         }}
         onClick={(e) => {
           e.preventDefault();
-          setIsPlaying(!isPlaying); // Toggle video playback on click
+          if (!isPlaying && videoId) {
+            setIsPlaying(true); // Start video playback on click
+          }
         }}
       >
         {/* Thumbnail */}
         <div className="relative aspect-[9/16] overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900">
-          {isPlaying && playAddr ? (
-            <video
-              className="h-full w-full object-cover"
-              src={playAddr}
-              autoPlay
-              loop
-              muted
-              playsInline
-              controls
-            />
-          ) : isPlaying && videoId ? (
-            <iframe
-              src={`https://www.tiktok.com/embed/v2/${videoId}`}
-              className="h-full w-full"
-              allowFullScreen
-              allow="autoplay; encrypted-media;"
-              style={{ border: 'none' }}
-            />
+          {isPlaying && videoId ? (
+            // TikTok Official Embed - легальное решение
+            <div className="relative h-full w-full bg-black">
+              <button
+                className="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-black/70 hover:bg-black/90 flex items-center justify-center text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsPlaying(false);
+                }}
+              >
+                ✕
+              </button>
+              <iframe
+                src={`https://www.tiktok.com/embed/v2/${videoId}?autoplay=1`}
+                className="w-full h-full"
+                style={{ border: 'none', minHeight: '400px' }}
+                allowFullScreen
+                allow="autoplay; encrypted-media; picture-in-picture"
+              />
+            </div>
           ) : coverImage && coverImage !== '/placeholder-video.svg' ? (
             <img
               src={coverImage}
@@ -179,41 +252,47 @@ export function VideoCard({
             </div>
           )}
 
-          {/* Overlay */}
-          <div className={cn(
-            'absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity duration-300',
-            isHovered ? 'opacity-100' : 'opacity-0'
-          )}>
-            {/* Play Button */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className={cn(
-                'w-16 h-16 rounded-full bg-white/90 flex items-center justify-center transition-transform duration-300',
-                isHovered ? 'scale-100' : 'scale-0'
-              )}>
-                <Play className="h-8 w-8 text-black fill-black ml-1" />
+          {/* Overlay - only show when not playing */}
+          {!isPlaying && (
+            <div className={cn(
+              'absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity duration-300',
+              isHovered ? 'opacity-100' : 'opacity-60'
+            )}>
+              {/* Play Button - Always visible, bigger on hover */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className={cn(
+                  'rounded-full bg-white/90 flex items-center justify-center transition-all duration-300 shadow-lg',
+                  isHovered ? 'w-16 h-16 scale-110' : 'w-12 h-12'
+                )}>
+                  <Play className={cn(
+                    'text-black fill-black ml-1',
+                    isHovered ? 'h-8 w-8' : 'h-6 w-6'
+                  )} />
+                </div>
               </div>
-            </div>
 
-            {/* Duration */}
-            <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-              {formatDuration(video.video.duration)}
-            </div>
+              {/* Duration */}
+              <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                {formatDuration(video.video?.duration || 0)}
+              </div>
 
-            {/* AI Generate Button */}
-            {onGenerateScript && (
-              <Button
-                size="sm"
-                className="absolute bottom-2 left-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onGenerateScript(video);
-                }}
-              >
-                <Sparkles className="h-4 w-4 mr-1" />
-                AI Script
-              </Button>
-            )}
-          </div>
+              {/* AI Generate Button */}
+              {onGenerateScript && isHovered && (
+                <Button
+                  size="sm"
+                  className="absolute bottom-2 left-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onGenerateScript(video);
+                  }}
+                >
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  AI Script
+                </Button>
+              )}
+            </div>
+          )}
+          
 
           {/* UTS/Viral Score Badge - Always show if available */}
           {viralScore > 0 && (
@@ -309,11 +388,11 @@ export function VideoCard({
           </p>
 
           {/* Hashtags */}
-          {video.hashtags.length > 0 && (
+          {video.hashtags && video.hashtags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {video.hashtags.slice(0, 3).map((hashtag) => (
-                <Badge key={hashtag.id} variant="outline" className="text-xs">
-                  #{hashtag.name}
+                <Badge key={hashtag?.id || hashtag?.name} variant="outline" className="text-xs">
+                  #{hashtag?.name || hashtag}
                 </Badge>
               ))}
             </div>
@@ -376,10 +455,10 @@ export function VideoCard({
 
       {/* Video Analysis Modal - Professional Layout */}
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent className="max-w-[1100px] max-h-[90vh] p-0">
-          <div className="flex flex-col h-full">
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] p-0 overflow-hidden">
+          <div className="flex flex-col h-full max-h-[90vh]">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
               <div className="flex items-center gap-3">
                 {authorAvatar && authorAvatar !== '/placeholder-avatar.svg' ? (
                   <img
@@ -419,9 +498,9 @@ export function VideoCard({
             </div>
 
             {/* Main Content: Video + Metrics */}
-            <div className="flex gap-6 p-6 overflow-y-auto">
+            <div className="flex gap-6 p-6 flex-1 min-h-0 overflow-hidden">
               {/* Left: Video Player */}
-              <div className="flex-shrink-0 w-[340px]">
+              <div className="flex-shrink-0 w-[300px]">
                 <div className="aspect-[9/16] rounded-lg overflow-hidden bg-black relative group">
                   {playAddr ? (
                     <video
@@ -469,15 +548,32 @@ export function VideoCard({
               </div>
 
               {/* Right: Metrics & Info */}
-              <div className="flex-1 space-y-4">
-                {/* Top Metrics Row */}
+              <div className="flex-1 space-y-4 overflow-y-auto min-w-0 max-w-[500px]">
+                {/* Deep Analyze Badge */}
+                {isDeepVideo && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30">
+                    <Sparkles className="h-5 w-5 text-purple-500" />
+                    <span className="font-semibold text-purple-600">Deep Analyze Results</span>
+                    <Badge className="ml-auto bg-purple-500/20 text-purple-600 border-purple-500/30">PRO</Badge>
+                  </div>
+                )}
+
+                {/* UTS Breakdown (Deep mode only) */}
+                {isDeepVideo && (video as TikTokVideoDeep).uts_breakdown && (
+                  <UTSBreakdown 
+                    uts_score={viralScore} 
+                    breakdown={(video as TikTokVideoDeep).uts_breakdown!} 
+                  />
+                )}
+
+                {/* Quick Stats Grid */}
                 <div className="grid grid-cols-3 gap-3">
                   <Card className="p-3 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-200/20">
                     <div className="flex items-center gap-2 mb-1">
                       <Flame className="h-4 w-4 text-orange-500" />
-                      <span className="text-xs font-medium text-muted-foreground">Viral Score</span>
+                      <span className="text-xs font-medium text-muted-foreground">UTS Score</span>
                     </div>
-                    <div className="text-2xl font-bold text-orange-600">{viralScore.toFixed(0)}</div>
+                    <div className="text-2xl font-bold text-orange-600">{viralScore.toFixed(1)}</div>
                   </Card>
 
                   <Card className="p-3 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-200/20">
@@ -497,7 +593,7 @@ export function VideoCard({
                   </Card>
                 </div>
 
-                {/* Bottom Metrics Row */}
+                {/* Engagement Stats */}
                 <div className="grid grid-cols-3 gap-3">
                   <Card className="p-3 bg-gradient-to-br from-pink-500/10 to-rose-500/10 border-pink-200/20">
                     <div className="flex items-center gap-2 mb-1">
@@ -523,6 +619,38 @@ export function VideoCard({
                     <div className="text-2xl font-bold text-indigo-600">{formatNumber(video.stats?.shareCount || 0)}</div>
                   </Card>
                 </div>
+
+                {/* Deep Analyze Extra Metrics */}
+                {isDeepVideo && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {(video as TikTokVideoDeep).cascade_count !== undefined && (
+                      <Card className="p-3 bg-gradient-to-br from-yellow-500/10 to-amber-500/10 border-yellow-200/20">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Music className="h-4 w-4 text-yellow-600" />
+                          <span className="text-xs font-medium text-muted-foreground">Sound Cascade</span>
+                        </div>
+                        <div className="text-xl font-bold text-yellow-600">
+                          {(video as TikTokVideoDeep).cascade_count} videos
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Using this sound</p>
+                      </Card>
+                    )}
+                    {(video as TikTokVideoDeep).saturation_score !== undefined && (
+                      <Card className="p-3 bg-gradient-to-br from-cyan-500/10 to-teal-500/10 border-cyan-200/20">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Info className="h-4 w-4 text-cyan-600" />
+                          <span className="text-xs font-medium text-muted-foreground">Saturation</span>
+                        </div>
+                        <div className="text-xl font-bold text-cyan-600">
+                          {((video as TikTokVideoDeep).saturation_score! * 100).toFixed(0)}%
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {(video as TikTokVideoDeep).saturation_score! > 0.7 ? '✅ Fresh trend' : '⚠️ Getting saturated'}
+                        </p>
+                      </Card>
+                    )}
+                  </div>
+                )}
 
                 {/* Description */}
                 <Card className="p-4">
@@ -558,7 +686,7 @@ export function VideoCard({
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -576,6 +704,25 @@ export function VideoCard({
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Open in TikTok
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+                    onClick={() => {
+                      setShowDetails(false);
+                      setShowAIChat(true);
+                      // Add initial context message
+                      if (chatMessages.length === 0) {
+                        setChatMessages([{
+                          role: 'assistant',
+                          content: `Hi! I'm analyzing this video by @${video.author?.uniqueId || video.author_username}. It has ${video.stats?.playCount?.toLocaleString() || 0} views and a UTS Score of ${video.uts_score || video.viralScore || 0}. What would you like to know about it?`
+                        }]);
+                      }
+                    }}
+                  >
+                    <Bot className="h-4 w-4 mr-2" />
+                    Ask AI
                   </Button>
                 </div>
               </div>
@@ -722,6 +869,149 @@ Duration: ~${script.duration}s
           )}
         </DialogContent>
       </Dialog>
+
+      {/* AI Chat Modal */}
+      <Dialog open={showAIChat} onOpenChange={setShowAIChat}>
+        <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0">
+          {/* Header */}
+          <div className="flex items-center gap-3 px-6 py-4 border-b bg-gradient-to-r from-purple-600/10 to-pink-600/10">
+            <div className="p-2 rounded-full bg-gradient-to-r from-purple-600 to-pink-600">
+              <Bot className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg">AI Video Analyst</DialogTitle>
+              <p className="text-xs text-muted-foreground">Ask me anything about this video</p>
+            </div>
+          </div>
+
+          {/* Video Context Card */}
+          <div className="px-4 py-3 bg-muted/50 border-b">
+            <div className="flex items-center gap-3">
+              {coverImage && coverImage !== '/placeholder-video.svg' && (
+                <img src={coverImage} alt="" className="w-12 h-16 object-cover rounded" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">@{video.author?.uniqueId || video.author_username}</p>
+                <p className="text-xs text-muted-foreground truncate">{video.description || video.title}</p>
+                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Eye className="h-3 w-3" />
+                    {(video.stats?.playCount || 0).toLocaleString()}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Heart className="h-3 w-3" />
+                    {(video.stats?.diggCount || 0).toLocaleString()}
+                  </span>
+                  <Badge variant="secondary" className="text-xs">
+                    UTS: {video.uts_score || video.viralScore || 0}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Chat Messages */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+            {chatMessages.map((msg, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "flex gap-3",
+                  msg.role === 'user' ? 'justify-end' : 'justify-start'
+                )}
+              >
+                {msg.role === 'assistant' && (
+                  <div className="p-1.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 h-fit">
+                    <Bot className="h-4 w-4 text-white" />
+                  </div>
+                )}
+                <div
+                  className={cn(
+                    "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
+                    msg.role === 'user'
+                      ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
+                      : 'bg-muted'
+                  )}
+                >
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                </div>
+                {msg.role === 'user' && (
+                  <div className="p-1.5 rounded-full bg-muted h-fit">
+                    <User className="h-4 w-4" />
+                  </div>
+                )}
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex gap-3">
+                <div className="p-1.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600">
+                  <Bot className="h-4 w-4 text-white" />
+                </div>
+                <div className="bg-muted rounded-2xl px-4 py-2.5">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Quick Actions */}
+          <div className="px-4 py-2 border-t flex gap-2 overflow-x-auto">
+            {['Why is this viral?', 'How to recreate?', 'Target audience?', 'Best posting time?'].map((q) => (
+              <Button
+                key={q}
+                variant="outline"
+                size="sm"
+                className="text-xs whitespace-nowrap"
+                onClick={() => {
+                  setChatInput(q);
+                  setTimeout(() => sendChatMessage(), 100);
+                }}
+                disabled={chatLoading}
+              >
+                {q}
+              </Button>
+            ))}
+          </div>
+
+          {/* Input */}
+          <div className="px-4 py-3 border-t bg-background">
+            <div className="flex gap-2">
+              <Input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Ask about this video..."
+                className="flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChatMessage();
+                  }
+                }}
+                disabled={chatLoading}
+              />
+              <Button
+                onClick={sendChatMessage}
+                disabled={!chatInput.trim() || chatLoading}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature="Deep Analyze"
+      />
     </>
   );
 }
