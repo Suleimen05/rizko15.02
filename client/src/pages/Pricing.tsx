@@ -393,7 +393,7 @@ export function Pricing() {
         <Card className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/20">
           <CardContent className="py-12">
             <h2 className="text-2xl font-bold mb-4">Ready to go viral?</h2>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">Join thousands of creators who use TrendScout AI to find trends, create viral content, and grow their audience.</p>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">Join thousands of creators who use Risko.ai to find trends, create viral content, and grow their audience.</p>
             <div className="flex items-center justify-center gap-4">
               <Button size="lg" className="bg-purple-600 hover:bg-purple-700" onClick={() => navigate('/dashboard/checkout?plan=pro&billing=monthly')}>Start Pro Trial</Button>
               <Button size="lg" variant="outline" onClick={() => navigate('/dashboard')}>Try Free</Button>

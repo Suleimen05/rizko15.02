@@ -26,7 +26,7 @@ from ..schemas.auth import (
 )
 from ..dependencies import get_current_user
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(tags=["Authentication"])
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -83,9 +83,9 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    # Generate tokens
-    access_token = create_access_token(data={"sub": new_user.id})
-    refresh_token = create_refresh_token(data={"sub": new_user.id})
+    # Generate tokens (sub must be string for JWT standard)
+    access_token = create_access_token(data={"sub": str(new_user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(new_user.id)})
 
     return AuthResponse(
         access_token=access_token,
@@ -138,9 +138,9 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     user.last_login_at = datetime.utcnow()
     db.commit()
 
-    # Generate tokens
-    access_token = create_access_token(data={"sub": user.id})
-    refresh_token = create_refresh_token(data={"sub": user.id})
+    # Generate tokens (sub must be string for JWT standard)
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
     return AuthResponse(
         access_token=access_token,
@@ -190,9 +190,9 @@ async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db))
             detail="User not found or inactive",
         )
 
-    # Generate new tokens
-    new_access_token = create_access_token(data={"sub": user.id})
-    new_refresh_token = create_refresh_token(data={"sub": user.id})
+    # Generate new tokens (sub must be string for JWT standard)
+    new_access_token = create_access_token(data={"sub": str(user.id)})
+    new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
     return Token(
         access_token=new_access_token,
@@ -276,3 +276,90 @@ async def update_user_settings(
     db.refresh(settings)
 
     return UserSettingsResponse.model_validate(settings)
+
+
+# =============================================================================
+# OAUTH / SUPABASE SYNC
+# =============================================================================
+
+from pydantic import BaseModel
+from typing import Optional
+
+class OAuthSyncRequest(BaseModel):
+    """Request to sync OAuth user with our database."""
+    supabase_id: str
+    email: str
+    full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    provider: str = "google"
+
+
+@router.post("/oauth/sync", response_model=AuthResponse)
+async def sync_oauth_user(data: OAuthSyncRequest, db: Session = Depends(get_db)):
+    """
+    Sync Supabase OAuth user with our database.
+
+    Called by frontend after successful Supabase OAuth login.
+    Creates user if not exists, returns our JWT tokens.
+
+    Args:
+        data: OAuth user data from Supabase
+        db: Database session
+
+    Returns:
+        AuthResponse: Our JWT tokens and user data
+    """
+    # Try to find existing user by email
+    user = db.query(User).filter(User.email == data.email).first()
+
+    if user is None:
+        # Create new user from OAuth data
+        user = User(
+            email=data.email,
+            full_name=data.full_name or data.email.split("@")[0],
+            avatar_url=data.avatar_url,
+            hashed_password="",  # No password for OAuth users
+            is_active=True,
+            is_verified=True,  # OAuth users are verified
+            oauth_provider=data.provider,
+            oauth_id=data.supabase_id,
+            last_login_at=datetime.utcnow()
+        )
+        db.add(user)
+        db.flush()
+
+        # Create default settings
+        user_settings = UserSettings(
+            user_id=user.id,
+            dark_mode=False,
+            language="en",
+            region="US",
+            auto_generate_scripts=True,
+            notifications_trends=True,
+            notifications_competitors=True,
+            notifications_new_videos=False,
+            notifications_weekly_report=True
+        )
+        db.add(user_settings)
+        db.commit()
+        db.refresh(user)
+    else:
+        # Update existing user
+        user.last_login_at = datetime.utcnow()
+        if data.avatar_url and not user.avatar_url:
+            user.avatar_url = data.avatar_url
+        if data.full_name and user.full_name == user.email.split("@")[0]:
+            user.full_name = data.full_name
+        db.commit()
+        db.refresh(user)
+
+    # Generate our JWT tokens
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
+    return AuthResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user)
+    )

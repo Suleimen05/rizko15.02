@@ -1,202 +1,134 @@
-import { useRef, useState, useEffect } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  Sparkles,
   TrendingUp,
+  Activity,
   Zap,
-  BarChart3,
-  Users,
-  Bot,
-  Video,
-  Target
+  CheckCircle2,
+  Play,
+  BarChart3
 } from 'lucide-react';
 
-const icons = [
-  { Icon: Sparkles, label: 'AI Analysis', color: '#3b82f6' },
-  { Icon: TrendingUp, label: 'Viral Score', color: '#8b5cf6' },
-  { Icon: Zap, label: 'Instant', color: '#f97316' },
-  { Icon: BarChart3, label: 'Analytics', color: '#10b981' },
-  { Icon: Users, label: 'Community', color: '#f43f5e' },
-  { Icon: Bot, label: 'AI Assistant', color: '#6366f1' },
-  { Icon: Video, label: 'Scripts', color: '#d946ef' },
-  { Icon: Target, label: 'Targeting', color: '#0ea5e9' },
-];
+const FloatingBadge = ({ children, delay = 0, x, y, className = "" }: any) => (
+  <motion.div
+    initial={{ opacity: 0, y: y + 20, x }}
+    animate={{
+      opacity: 1,
+      y: [y, y - 10, y],
+      x: x
+    }}
+    transition={{
+      y: {
+        duration: 4,
+        repeat: Infinity,
+        repeatType: "reverse",
+        ease: "easeInOut",
+        delay: delay
+      },
+      opacity: { duration: 0.5, delay: delay }
+    }}
+    className={`absolute bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-2xl shadow-xl flex items-center gap-2 ${className}`}
+  >
+    {children}
+  </motion.div>
+);
 
-interface OrbitalItemProps {
-  icon: typeof icons[0];
-  index: number;
-  total: number;
-  rotation: number;
-  mouseY: any;
-}
-
-const OrbitalItem = ({ icon, index, total, rotation, mouseY }: OrbitalItemProps) => {
-  // Calculate position on the orbit
-  const angle = (index / total) * 360;
-  const radius = 280;
-
-  // 3D transform for orbital position
-  const rotateY = angle + rotation;
-  const translateZ = radius;
-
-  // Mouse parallax effect - reduced sensitivity for smoother movement
-  const rotateXMouse = useSpring(useTransform(mouseY, [-400, 400], [8, -8]), {
-    stiffness: 80,  // Reduced stiffness for smoother movement
-    damping: 30     // Increased damping for stability
-  });
-
+const Hero3D = () => {
   return (
-    <motion.div
-      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 preserve-3d"
-      style={{
-        rotateY: rotateY,
-        translateZ: translateZ,
-        rotateX: rotateXMouse,
-      }}
-    >
+    <div className="relative w-full h-[500px] flex items-center justify-center overflow-hidden">
+      {/* Background Gradients */}
+      <div className="absolute inset-0">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-500/20 rounded-full blur-[100px] animate-pulse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-purple-500/20 rounded-full blur-[80px]" />
+      </div>
+
+      {/* Main Central Card */}
       <motion.div
-        className="relative group"
-        style={{
-          rotateY: -rotateY, // Counter-rotate to keep icon facing outward
-        }}
-        whileHover={{ scale: 1.1, z: 20 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        className="relative z-10"
       >
-        {/* Glow effect */}
-        <div
-          className="absolute inset-0 rounded-2xl blur-xl opacity-0 group-hover:opacity-50 transition-opacity"
-          style={{ backgroundColor: icon.color }}
-        />
-
-        {/* Icon container */}
-        <div
-          className="w-20 h-20 rounded-2xl flex items-center justify-center cursor-pointer transition-all duration-300"
-          style={{
-            background: `linear-gradient(135deg, ${icon.color}40 0%, ${icon.color}20 100%)`,
-            border: `1px solid ${icon.color}40`,
-            boxShadow: `0 8px 32px ${icon.color}30`,
-          }}
-        >
-          <icon.Icon
-            className="w-8 h-8 text-white drop-shadow-lg"
-            style={{ filter: `drop-shadow(0 2px 4px ${icon.color}50)` }}
-          />
-
-          {/* Label tooltip */}
-          <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-            <span className="text-xs text-white font-medium bg-black/60 px-2 py-1 rounded backdrop-blur-sm">
-              {icon.label}
+        <div className="relative w-80 rounded-3xl bg-gradient-to-b from-gray-900/80 to-black/80 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden p-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-white" />
+              </div>
+              <span className="font-semibold text-white">Trend Alert</span>
+            </div>
+            <span className="text-xs text-green-400 font-medium bg-green-500/10 px-2 py-1 rounded-full">
+              LIVE
             </span>
+          </div>
+
+          {/* Content Mock */}
+          <div className="space-y-4">
+            <div className="h-32 rounded-xl bg-gradient-to-tr from-blue-900/40 to-purple-900/40 border border-white/5 relative overflow-hidden group">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Play className="w-5 h-5 text-white fill-white" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="h-2 w-3/4 rounded-full bg-gray-700/50" />
+              <div className="h-2 w-1/2 rounded-full bg-gray-700/30" />
+            </div>
+
+            <div className="pt-4 flex items-center justify-between border-t border-white/5">
+              <div className="text-center">
+                <p className="text-xs text-gray-400">Viral Score</p>
+                <p className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">98%</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-gray-400">Growth</p>
+                <p className="text-lg font-bold text-green-400">+450%</p>
+              </div>
+            </div>
           </div>
         </div>
       </motion.div>
-    </motion.div>
-  );
-};
 
-const Hero3D = () => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [rotation, setRotation] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
+      {/* Floating Elements */}
+      <FloatingBadge x={-160} y={-100} delay={0.2} className="z-20">
+        <div className="p-2 rounded-lg bg-orange-500/20">
+          <Zap className="w-5 h-5 text-orange-400" />
+        </div>
+        <div>
+          <p className="text-xs text-gray-300">Trend Detected</p>
+          <p className="text-sm font-bold text-white">#AIRevolution</p>
+        </div>
+      </FloatingBadge>
 
-  // Mouse tracking - only for the carousel
-  const mouseY = useMotionValue(0);
+      <FloatingBadge x={150} y={-60} delay={0.5} className="z-0">
+        <div className="p-2 rounded-lg bg-green-500/20">
+          <CheckCircle2 className="w-5 h-5 text-green-400" />
+        </div>
+        <p className="text-sm font-medium text-white">Script Generated</p>
+      </FloatingBadge>
 
-  // Auto-rotation animation
-  useEffect(() => {
-    if (isPaused) return;
+      <FloatingBadge x={-140} y={120} delay={0.8} className="z-20">
+        <div className="p-2 rounded-lg bg-blue-500/20">
+          <Activity className="w-5 h-5 text-blue-400" />
+        </div>
+        <div>
+          <p className="text-xs text-gray-300">Engagement</p>
+          <p className="text-sm font-bold text-white">2.4M Views</p>
+        </div>
+      </FloatingBadge>
 
-    const interval = setInterval(() => {
-      setRotation(prev => (prev + 0.3) % 360);
-    }, 50);
+      <FloatingBadge x={160} y={80} delay={1.1} className="z-20">
+        <div className="p-2 rounded-lg bg-purple-500/20">
+          <BarChart3 className="w-5 h-5 text-purple-400" />
+        </div>
+        <div>
+          <p className="text-xs text-gray-300">Revenue</p>
+          <p className="text-sm font-bold text-white">$12,450</p>
+        </div>
+      </FloatingBadge>
 
-    return () => clearInterval(interval);
-  }, [isPaused]);
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const centerY = rect.top + rect.height / 2;
-    mouseY.set(e.clientY - centerY);
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative w-full h-[500px] md:h-[600px] flex items-center justify-center"
-      style={{ perspective: '1000px' }}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
-    >
-      {/* Background glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <motion.div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full"
-          style={{
-            background: 'radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, rgba(139, 92, 246, 0.1) 50%, transparent 70%)',
-          }}
-          animate={{
-            scale: [1, 1.1, 1],
-            opacity: [0.5, 0.7, 0.5],
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-        />
-      </div>
-
-      {/* Orbital ring container - this is what tilts with mouse */}
-      <motion.div
-        className="relative w-full h-full"
-        style={{
-          transformStyle: 'preserve-3d',
-        }}
-        animate={{
-          rotateY: rotation,
-        }}
-        transition={{
-          duration: 0.05,
-          ease: 'linear',
-        }}
-      >
-        {/* Orbital icons - these get the mouse tilt effect */}
-        {icons.map((icon, index) => (
-          <OrbitalItem
-            key={index}
-            icon={icon}
-            index={index}
-            total={icons.length}
-            rotation={rotation}
-            mouseY={mouseY}
-          />
-        ))}
-      </motion.div>
-
-      {/* Floating particles around the orbit */}
-      {[...Array(6)].map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute w-2 h-2 rounded-full"
-          style={{
-            background: ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#10b981', '#6366f1'][i],
-          }}
-          animate={{
-            x: [0, Math.cos(i * 60 * Math.PI / 180) * 350, 0],
-            y: [0, Math.sin(i * 60 * Math.PI / 180) * 200, 0],
-            opacity: [0.3, 0.8, 0.3],
-            scale: [0.5, 1, 0.5],
-          }}
-          transition={{
-            duration: 4 + i * 0.5,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: i * 0.3,
-          }}
-        />
-      ))}
     </div>
   );
 };

@@ -13,6 +13,7 @@ import { UnifiedSidebar } from '@/components/UnifiedSidebar';
 import { Dashboard } from '@/pages/Dashboard';
 import { Trending } from '@/pages/Trending';
 import { Discover } from '@/pages/Discover';
+import { DeepAnalysis } from '@/pages/DeepAnalysis';
 import { AIScripts } from '@/pages/AIScripts';
 import { AIWorkspace } from '@/pages/AIWorkspace';
 import { Competitors } from '@/pages/Competitors';
@@ -23,6 +24,8 @@ import { Pricing } from '@/pages/Pricing';
 import { UsagePolicy } from '@/pages/UsagePolicy';
 import { PrivacyPolicy } from '@/pages/PrivacyPolicy';
 import { Marketplace } from '@/pages/Marketplace';
+import { Feedback } from '@/pages/Feedback';
+import { Saved } from '@/pages/Saved';
 import { useAppState } from '@/hooks/useAppState';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -41,7 +44,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
           <div className="w-16 h-16 mx-auto mb-4">
             <div className="w-full h-full rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">TrendScout AI</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Risko.ai</h1>
           <p className="text-gray-500 dark:text-gray-400">Loading your dashboard...</p>
         </motion.div>
       </div>
@@ -90,6 +93,8 @@ function DashboardLayout() {
               <Route path="/trending" element={<Trending />} />
               <Route path="/discover" element={<Discover />} />
               <Route path="/discover/*" element={<Discover />} />
+              <Route path="/analytics" element={<DeepAnalysis />} />
+              <Route path="/saved" element={<Saved />} />
               <Route path="/ai-scripts" element={<AIWorkspace />} />
               <Route path="/ai-scripts-old" element={<AIScripts />} />
               <Route path="/account-search" element={<AccountSearch />} />
@@ -100,6 +105,7 @@ function DashboardLayout() {
               <Route path="/usage-policy" element={<UsagePolicy />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/marketplace" element={<Marketplace />} />
+              <Route path="/feedback" element={<Feedback />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </div>

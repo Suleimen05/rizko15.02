@@ -14,6 +14,8 @@ import {
 import { cn } from '@/lib/utils';
 import { UTSBreakdown } from '@/components/metrics/UTSBreakdown';
 import { UpgradeModal } from '@/components/UpgradeModal';
+import { toast } from 'sonner';
+import { apiService } from '@/services/api';
 // TikTok Embed - официальное легальное решение
 import type { TikTokVideo, TikTokVideoDeep, AnalysisMode } from '@/types';
 import { useAIScriptGenerator } from '@/hooks/useTikTok';
@@ -40,6 +42,8 @@ export function VideoCard({
   const [isHovered, setIsHovered] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [favoriteId, setFavoriteId] = useState<number | null>(null);
+  const [savingInProgress, setSavingInProgress] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -59,6 +63,69 @@ export function VideoCard({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  // Check if video is saved on mount
+  useEffect(() => {
+    const checkSavedStatus = async () => {
+      // Need trend_id (database ID) to check - this comes from backend
+      // The video object should have an 'id' that matches the trend's platform_id
+      // or a numeric id if it's from the trends table
+      const trendId = video.trend_id || (typeof video.id === 'number' ? video.id : null);
+      if (!trendId) return;
+
+      try {
+        const result = await apiService.checkFavorite(trendId);
+        setIsSaved(result.is_favorited);
+        setFavoriteId(result.favorite_id);
+      } catch (error) {
+        // Silently fail - user might not be authenticated
+        console.debug('Could not check favorite status:', error);
+      }
+    };
+
+    checkSavedStatus();
+  }, [video.id, video.trend_id]);
+
+  // Handle save/unsave toggle
+  const handleSaveToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (savingInProgress) return;
+
+    // Get database trend_id - available in Deep mode or from cached results
+    const trendId = video.trend_id || (typeof video.id === 'number' ? video.id : null);
+    if (!trendId) {
+      toast.error('Save is only available for Deep Analyze results. Enable Deep Analyze to save videos.');
+      return;
+    }
+
+    setSavingInProgress(true);
+
+    try {
+      if (isSaved && favoriteId) {
+        // Remove from favorites
+        await apiService.removeFavorite(favoriteId);
+        setIsSaved(false);
+        setFavoriteId(null);
+        toast.success('Removed from saved videos');
+      } else {
+        // Add to favorites
+        const result = await apiService.addFavorite({ trend_id: trendId });
+        setIsSaved(true);
+        setFavoriteId(result.id);
+        toast.success('Video saved!');
+      }
+
+      // Call optional onSave callback
+      onSave?.(video);
+    } catch (error: any) {
+      console.error('Failed to save/unsave video:', error);
+      const message = error.response?.data?.detail || 'Failed to update saved status';
+      toast.error(message);
+    } finally {
+      setSavingInProgress(false);
+    }
+  };
   
   // AI Chat function
   const sendChatMessage = async () => {
@@ -340,14 +407,18 @@ UTS Score: ${video.uts_score || video.viralScore || 0}
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-2 right-12 h-8 w-8 bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsSaved(!isSaved);
-              onSave?.(video);
-            }}
+            className={cn(
+              "absolute top-2 right-12 h-8 w-8 bg-black/50 hover:bg-black/70 text-white transition-opacity",
+              isSaved ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            )}
+            onClick={handleSaveToggle}
+            disabled={savingInProgress}
           >
-            <Bookmark className={cn('h-4 w-4', isSaved && 'fill-white')} />
+            {savingInProgress ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Bookmark className={cn('h-4 w-4', isSaved && 'fill-white text-yellow-400')} />
+            )}
           </Button>
         </div>
 

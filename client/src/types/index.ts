@@ -65,6 +65,7 @@ export interface TikTokVideo {
   viralScore?: number;
   engagementRate?: number;
   // Backend fields
+  trend_id?: number;   // Database ID for favorites
   uts_score?: number;
   cover_url?: string;
   url?: string;

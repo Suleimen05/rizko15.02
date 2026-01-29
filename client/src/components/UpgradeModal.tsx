@@ -111,7 +111,7 @@ export function UpgradeModal({ isOpen, onClose, feature }: UpgradeModalProps) {
                   Velocity & saturation
                 </li>
                 <li className="text-xs italic font-semibold text-purple-600">
-                  Exclusive to TrendScout AI
+                  Exclusive to Risko.ai
                 </li>
               </ul>
             </div>

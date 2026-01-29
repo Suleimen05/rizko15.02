@@ -267,7 +267,9 @@ export function useSearchWithFilters(filters: SearchFilters & {
 
       // Convert trends to TikTokVideos (with Deep Analyze fields if available)
       const converted = result.items.map((trend: any) => ({
-        id: trend.platform_id || String(trend.id),
+        id: trend.id || trend.platform_id,  // platform_id for video display
+        // Database ID for favorites - trend_id from deep mode, or numeric id from cached results
+        trend_id: trend.trend_id || (typeof trend.id === 'number' ? trend.id : null),
         title: trend.description || 'No description',
         description: trend.description || '',
         author: {

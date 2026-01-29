@@ -12,9 +12,9 @@ from .services.clip_service import get_text_embedding, get_image_embedding
 from .services.ai_service import generate_trend_summary
 
 app = FastAPI(
-    title="TrendScout ML Service",
+    title="Risko.ai ML Service",
     version="1.0.0",
-    description="Machine Learning microservice for TrendScout AI"
+    description="Machine Learning microservice for Risko.ai"
 )
 
 # CORS configuration

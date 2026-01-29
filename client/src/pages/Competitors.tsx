@@ -7,13 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Competitor, TikTokVideo } from '@/types';
 import { toast } from 'sonner';
-import axios from 'axios';
-
-// API URL
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
-// DEV MODE - тот же user_id что в AuthContext
-const DEV_USER_ID = 'dev-user-123';
+import { apiClient } from '@/services/api';
 
 interface CompetitorCardProps {
   competitor: Competitor;
@@ -115,10 +109,10 @@ export function Competitors() {
   const loadCompetitors = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get(`${API_URL}/competitors/`, {
-        headers: { 'X-User-Id': DEV_USER_ID }
-      });
-      setCompetitors(response.data.map((c: any) => ({
+      const response = await apiClient.get('/competitors/');
+      // Handle both paginated and array response
+      const items = response.data.items || response.data;
+      setCompetitors(items.map((c: any) => ({
         id: c.id.toString(),
         username: c.username,
         nickname: c.display_name,
@@ -163,11 +157,11 @@ export function Competitors() {
     if (!searchQuery.trim()) return;
 
     const cleanUsername = extractUsername(searchQuery);
-    
+
     try {
       setIsSearching(true);
       setSearchResults(null);
-      const response = await axios.get(`${API_URL}/competitors/search/${cleanUsername}`);
+      const response = await apiClient.get(`/competitors/search/${cleanUsername}`);
       setSearchResults(response.data);
     } catch (error: any) {
       console.error('Search error:', error);
@@ -182,15 +176,21 @@ export function Competitors() {
     }
   };
 
-  // Добавить канал в список
+  // Добавить канал в список (с оптимизацией - передаем данные поиска)
   const handleAddChannel = async (channel: any) => {
     try {
       setIsAdding(true);
-      await axios.post(
-        `${API_URL}/competitors/`,
-        { username: channel.username, notes: '' },
-        { headers: { 'X-User-Id': DEV_USER_ID } }
-      );
+      // Передаем search_data чтобы избежать повторного запроса к Apify
+      await apiClient.post('/competitors/', {
+        username: channel.username,
+        notes: '',
+        search_data: {
+          avatar: channel.avatar,
+          follower_count: channel.follower_count,
+          video_count: channel.video_count,
+          nickname: channel.nickname || channel.username
+        }
+      });
       toast.success(`@${channel.username} added to your list`);
       setSearchQuery('');
       setSearchResults(null);
@@ -210,9 +210,7 @@ export function Competitors() {
   // Удалить канал
   const handleRemoveChannel = async (competitor: Competitor) => {
     try {
-      await axios.delete(`${API_URL}/competitors/${competitor.username}`, {
-        headers: { 'X-User-Id': DEV_USER_ID }
-      });
+      await apiClient.delete(`/competitors/${competitor.username}`);
       toast.success(`@${competitor.username} removed`);
       loadCompetitors(); // Обновить список
     } catch (error) {

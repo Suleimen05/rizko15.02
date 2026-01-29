@@ -75,7 +75,7 @@ const LoginPage = () => {
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-white" />
               </div>
-              <span className="text-2xl font-bold text-white">TrendScout AI</span>
+              <span className="text-2xl font-bold text-white">Risko.ai</span>
             </motion.div>
 
             <motion.h1
@@ -96,7 +96,7 @@ const LoginPage = () => {
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: 0.4 }}
             >
-              Join thousands of creators who use TrendScout AI to discover trends,
+              Join thousands of creators who use Risko.ai to discover trends,
               generate viral content, and grow their audience faster than ever.
             </motion.p>
 
@@ -142,7 +142,7 @@ const LoginPage = () => {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xl font-bold text-white">TrendScout AI</span>
+              <span className="text-xl font-bold text-white">Risko.ai</span>
             </div>
 
             <div className="p-8 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl">

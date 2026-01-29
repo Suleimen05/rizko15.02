@@ -14,7 +14,7 @@ export function UsagePolicy() {
           <p className="text-muted-foreground">Last updated: January 2026</p>
 
           <h2>1. Acceptable Use</h2>
-          <p>TrendScout AI is designed for legitimate content creation and trend analysis. Users agree to use the platform responsibly and in compliance with all applicable laws.</p>
+          <p>Risko.ai is designed for legitimate content creation and trend analysis. Users agree to use the platform responsibly and in compliance with all applicable laws.</p>
 
           <h2>2. Prohibited Activities</h2>
           <ul>

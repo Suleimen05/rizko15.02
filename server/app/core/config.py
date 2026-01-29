@@ -3,7 +3,7 @@ import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "TrendScout V2 API"
+    PROJECT_NAME: str = "Risko.ai API"
     VERSION: str = "2.0.0"
     
     # База данных
@@ -13,10 +13,9 @@ class Settings(BaseSettings):
     APIFY_API_TOKEN: str = os.getenv("APIFY_API_TOKEN", "")
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
     
-    # === ДОБАВИЛИ ЭТИ СТРОКИ, ЧТОБЫ ИСПРАВИТЬ ОШИБКУ ===
-    SECRET_KEY: str = "supersecretkey123"
+    # Security - берём из переменной окружения для безопасности
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "change-this-in-production-please")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    # ===================================================
 
     # Настройки CORS
     BACKEND_CORS_ORIGINS: list = [

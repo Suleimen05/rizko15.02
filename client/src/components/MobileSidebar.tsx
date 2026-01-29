@@ -5,11 +5,10 @@ import {
   TrendingUp,
   Search,
   Users,
-  UserSearch,
+  MessageSquare,
   BarChart3,
   Settings,
   HelpCircle,
-  Sparkles,
   ChevronUp,
   LogOut,
   Rocket,
@@ -59,21 +58,14 @@ const mainNavItems = [
     icon: BarChart3,
   },
   {
-    title: 'Account Audit',
-    href: '/dashboard/account-search',
-    icon: UserSearch,
-  },
-  {
     title: 'Competitors',
     href: '/dashboard/competitors',
     icon: Users,
   },
   {
-    title: 'AI Scripts',
-    href: '/dashboard/ai-scripts',
-    icon: Sparkles,
-    badge: 'PRO',
-    badgeVariant: 'secondary' as const,
+    title: 'Feedback',
+    href: '/dashboard/feedback',
+    icon: MessageSquare,
   },
 ];
 
@@ -132,7 +124,7 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold text-sm shadow-lg">
                   TS
                 </div>
-                <SheetTitle className="font-semibold">TrendScout AI</SheetTitle>
+                <SheetTitle className="font-semibold">Risko.ai</SheetTitle>
               </div>
             </div>
           </SheetHeader>

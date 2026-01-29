@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Filter, SlidersHorizontal, X, ChevronDown, Lock, Sparkles, Zap, Loader2, Clock, TrendingUp, Hash } from 'lucide-react';
+import { Search, Filter, SlidersHorizontal, X, ChevronDown, Lock, Sparkles, Zap, Clock, TrendingUp, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -102,6 +102,7 @@ export function Discover() {
       // Only keep essential fields to reduce localStorage size
       const minimalVideos = newVideos.slice(0, 6).map(v => ({
         id: v.id,
+        trend_id: v.trend_id,  // Database ID for favorites
         title: v.title,
         description: v.description?.slice(0, 200), // Truncate description
         author: { uniqueId: v.author.uniqueId, nickname: v.author.nickname, avatar: v.author.avatar },
@@ -131,7 +132,7 @@ export function Discover() {
     localStorage.removeItem('trendscout_recent_videos');
   };
   
-  const { videos, loading, refetch, mode: responseMode } = useSearchWithFilters({
+  const { videos, loading, refetch } = useSearchWithFilters({
     ...filters,
     niche: searchQuery || searchKeyword,
     is_deep: analyzeMode === 'deep',
@@ -482,7 +483,7 @@ export function Discover() {
 
           <div className="flex gap-2 mt-4">
             <Button
-              onClick={refetch}
+              onClick={() => refetch(searchQuery || searchKeyword)}
               className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
             >
               Apply Filters
@@ -663,7 +664,7 @@ export function Discover() {
           <Button
             variant="outline"
             size="lg"
-            onClick={refetch}
+            onClick={() => refetch(searchQuery || searchKeyword)}
           >
             Load More Videos
           </Button>

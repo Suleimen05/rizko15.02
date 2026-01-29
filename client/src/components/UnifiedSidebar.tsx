@@ -5,7 +5,6 @@ import {
   TrendingUp,
   Search,
   Users,
-  UserSearch,
   BarChart3,
   Settings,
   HelpCircle,
@@ -21,6 +20,7 @@ import {
   MessageSquare,
   Star,
   MoreHorizontal,
+  Bookmark,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -56,14 +56,19 @@ const trendsNavItems = [
     icon: BarChart3,
   },
   {
-    title: 'Account Audit',
-    href: '/dashboard/account-search',
-    icon: UserSearch,
+    title: 'Saved',
+    href: '/dashboard/saved',
+    icon: Bookmark,
   },
   {
     title: 'Competitors',
     href: '/dashboard/competitors',
     icon: Users,
+  },
+  {
+    title: 'Feedback',
+    href: '/dashboard/feedback',
+    icon: MessageSquare,
   },
 ];
 
@@ -145,7 +150,7 @@ export function UnifiedSidebar({ variant }: UnifiedSidebarProps) {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold text-sm shadow-lg">
             TS
           </div>
-          <span className="font-semibold text-foreground">TrendScout AI</span>
+          <span className="font-semibold text-foreground">Risko.ai</span>
         </div>
       </div>
 

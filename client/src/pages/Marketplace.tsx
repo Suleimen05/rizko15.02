@@ -127,7 +127,7 @@ const providers: Provider[] = [
     type: 'ai',
     title: 'AI Script Generator',
     category: 'Script Writing',
-    description: 'Generate viral TikTok scripts in seconds. Powered by GPT-4 with TrendScout data.',
+    description: 'Generate viral TikTok scripts in seconds. Powered by GPT-4 with Risko.ai data.',
     rating: 4.7,
     reviews: 892,
     price: '$9',
@@ -1159,7 +1159,7 @@ export function Marketplace() {
                   <ul className="space-y-2">
                     {[
                       'Monetize your AI agents',
-                      'Access to TrendScout API and data',
+                      'Access to Risko.ai API and data',
                       'Reach thousands of potential customers',
                       'We handle payments and support',
                       '70/30 revenue share in your favor',

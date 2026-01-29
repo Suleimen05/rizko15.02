@@ -155,6 +155,6 @@ def create_test_users():
 
 
 if __name__ == "__main__":
-    print("🚀 TrendScout AI - Test User Seed Script")
+    print("🚀 Risko.ai - Test User Seed Script")
     print("=" * 50)
     create_test_users()

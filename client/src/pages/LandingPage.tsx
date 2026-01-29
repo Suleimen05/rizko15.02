@@ -88,14 +88,14 @@ const testimonials = [
     name: 'Sarah Chen',
     role: 'Content Creator',
     followers: '2.5M',
-    content: 'TrendScout AI completely transformed my content strategy. I went from 100K to 2.5M followers in just 6 months!',
+    content: 'Risko.ai completely transformed my content strategy. I went from 100K to 2.5M followers in just 6 months!',
     avatar: 'SC',
   },
   {
     name: 'Marcus Johnson',
     role: 'Social Media Manager',
     followers: 'Agency',
-    content: 'We manage 15 creator accounts and TrendScout AI saves us hours every day. Our clients love the results.',
+    content: 'We manage 15 creator accounts and Risko.ai saves us hours every day. Our clients love the results.',
     avatar: 'MJ',
   },
   {
@@ -132,7 +132,7 @@ export function LandingPage() {
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                 <TrendingUp className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold text-lg text-gray-900 dark:text-white">TrendScout AI</span>
+              <span className="font-bold text-lg text-gray-900 dark:text-white">Risko.ai</span>
             </Link>
 
             {/* Navigation */}
@@ -257,7 +257,7 @@ export function LandingPage() {
                     ))}
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    <span className="font-semibold text-gray-900 dark:text-white">2,500+</span> creators trust TrendScout AI
+                    <span className="font-semibold text-gray-900 dark:text-white">2,500+</span> creators trust Risko.ai
                   </p>
                 </div>
               </div>
@@ -419,7 +419,7 @@ export function LandingPage() {
               Loved by Creators Worldwide
             </h2>
             <p className="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              Join thousands of content creators who have transformed their growth with TrendScout AI.
+              Join thousands of content creators who have transformed their growth with Risko.ai.
             </p>
           </motion.div>
 
@@ -467,7 +467,7 @@ export function LandingPage() {
               Ready to Go Viral?
             </h2>
             <p className="text-lg text-white/80 mb-8 max-w-2xl mx-auto">
-              Join thousands of creators who are already using TrendScout AI to discover trends, create viral content, and grow their audience.
+              Join thousands of creators who are already using Risko.ai to discover trends, create viral content, and grow their audience.
             </p>
             <Link
               to="/login"
@@ -496,7 +496,7 @@ export function LandingPage() {
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-white" />
                 </div>
-                <span className="font-bold text-lg text-gray-900 dark:text-white">TrendScout AI</span>
+                <span className="font-bold text-lg text-gray-900 dark:text-white">Risko.ai</span>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 AI-powered analytics platform for content creators. Discover trends, generate scripts, and grow your audience.
@@ -529,7 +529,7 @@ export function LandingPage() {
           </div>
           <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              © 2026 TrendScout AI. All rights reserved.
+              © 2026 Risko.ai. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
               <a href="#" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">Twitter</a>

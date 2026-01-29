@@ -121,7 +121,7 @@ export function UTSBreakdown({ uts_score, breakdown }: UTSBreakdownProps) {
               <TooltipContent className="max-w-xs">
                 <p className="text-sm">
                   Our proprietary 6-layer algorithm that predicts viral potential.
-                  This mathematical model is unique to TrendScout AI.
+                  This mathematical model is unique to Risko.ai.
                 </p>
               </TooltipContent>
             </Tooltip>

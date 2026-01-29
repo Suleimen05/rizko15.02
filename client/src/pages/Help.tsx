@@ -98,7 +98,7 @@ export function Help() {
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => window.location.href = 'mailto:axislineX@gmail.com?subject=TrendScout Support'}
+              onClick={() => window.location.href = 'mailto:axislineX@gmail.com?subject=Risko.ai Support'}
             >
               Send Email
               <ArrowRight className="h-4 w-4 ml-2" />
