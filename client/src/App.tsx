@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -16,6 +16,7 @@ import { Discover } from '@/pages/Discover';
 import { DeepAnalysis } from '@/pages/DeepAnalysis';
 import { AIScripts } from '@/pages/AIScripts';
 import { AIWorkspace } from '@/pages/AIWorkspace';
+import { WorkflowBuilder } from '@/pages/WorkflowBuilder';
 import { Competitors } from '@/pages/Competitors';
 import { AccountSearch } from '@/pages/AccountSearch';
 import { SettingsPage } from '@/pages/Settings';
@@ -62,11 +63,15 @@ function DashboardLayout() {
   } = useAppState();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
 
   // Toggle between old sidebar and new unified sidebar
   // Change to 'A' or 'B' to test variants, or 'old' for original
   const sidebarVariant = 'A' as const;
   const useOldSidebar = false;
+
+  // Full-width pages without padding (like workflow builder)
+  const isFullWidthPage = location.pathname.includes('/ai-scripts') || location.pathname.includes('/ai-workspace');
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -82,33 +87,41 @@ function DashboardLayout() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header - Mobile only */}
-        <Header onToggleSidebar={() => setMobileMenuOpen(true)} />
+        {/* Header - Mobile only (hidden for full-width pages) */}
+        {!isFullWidthPage && (
+          <Header onToggleSidebar={() => setMobileMenuOpen(true)} />
+        )}
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto bg-muted/30">
-          <div className="container mx-auto px-4 md:px-6 py-6 md:pt-8 max-w-7xl">
+        <main className={isFullWidthPage ? "flex-1 overflow-hidden" : "flex-1 overflow-y-auto bg-muted/30"}>
+          {isFullWidthPage ? (
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/trending" element={<Trending />} />
-              <Route path="/discover" element={<Discover />} />
-              <Route path="/discover/*" element={<Discover />} />
-              <Route path="/analytics" element={<DeepAnalysis />} />
-              <Route path="/saved" element={<Saved />} />
-              <Route path="/ai-scripts" element={<AIWorkspace />} />
-              <Route path="/ai-scripts-old" element={<AIScripts />} />
-              <Route path="/account-search" element={<AccountSearch />} />
-              <Route path="/competitors" element={<Competitors />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/help" element={<Help />} />
-              <Route path="/pricing" element={<Pricing />} />
-              <Route path="/usage-policy" element={<UsagePolicy />} />
-              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="/marketplace" element={<Marketplace />} />
-              <Route path="/feedback" element={<Feedback />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/ai-scripts" element={<WorkflowBuilder />} />
+              <Route path="/ai-workspace" element={<AIWorkspace />} />
             </Routes>
-          </div>
+          ) : (
+            <div className="container mx-auto px-4 md:px-6 py-6 md:pt-8 max-w-7xl">
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/trending" element={<Trending />} />
+                <Route path="/discover" element={<Discover />} />
+                <Route path="/discover/*" element={<Discover />} />
+                <Route path="/analytics" element={<DeepAnalysis />} />
+                <Route path="/saved" element={<Saved />} />
+                <Route path="/ai-scripts-old" element={<AIScripts />} />
+                <Route path="/account-search" element={<AccountSearch />} />
+                <Route path="/competitors" element={<Competitors />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/help" element={<Help />} />
+                <Route path="/pricing" element={<Pricing />} />
+                <Route path="/usage-policy" element={<UsagePolicy />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/marketplace" element={<Marketplace />} />
+                <Route path="/feedback" element={<Feedback />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </div>
+          )}
         </main>
       </div>
 

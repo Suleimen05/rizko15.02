@@ -14,13 +14,25 @@ import {
   FileText,
   Sparkles,
   Headphones,
+  Lock,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface PlanFeature {
   name: string;
@@ -119,9 +131,73 @@ const highlights = [
 
 export function Pricing() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [isYearly, setIsYearly] = useState(false);
   const currentPlan = user?.subscription || 'free';
+
+  // Dev upgrade modal state
+  const [showDevModal, setShowDevModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string>('');
+  const [devCode, setDevCode] = useState('');
+  const [isUpgrading, setIsUpgrading] = useState(false);
+
+  const handlePlanClick = (planId: string) => {
+    if (planId === 'free' || currentPlan.toLowerCase() === planId) return;
+
+    // Open dev modal instead of checkout
+    setSelectedPlan(planId);
+    setDevCode('');
+    setShowDevModal(true);
+  };
+
+  const handleDevUpgrade = async () => {
+    if (!devCode.trim()) {
+      toast.error('Please enter dev code');
+      return;
+    }
+
+    setIsUpgrading(true);
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const authData = localStorage.getItem('risko_auth');
+      const token = authData ? JSON.parse(authData).tokens?.accessToken : null;
+
+      const response = await fetch(`${API_URL}/auth/dev/upgrade`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          plan: selectedPlan,
+          dev_code: devCode,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to upgrade');
+      }
+
+      toast.success(`Successfully upgraded to ${selectedPlan.toUpperCase()}!`);
+      setShowDevModal(false);
+
+      // Refresh user data to update subscription
+      if (refreshUser) {
+        await refreshUser();
+      } else {
+        // Fallback: reload page
+        window.location.reload();
+      }
+    } catch (error: any) {
+      console.error('Upgrade error:', error);
+      toast.error(error.message || 'Invalid dev code or upgrade failed');
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
 
   const getFeatureValue = (feature: PlanFeature, planId: string) => {
     const value = feature[planId as keyof PlanFeature];
@@ -200,13 +276,7 @@ export function Pricing() {
                   className={cn('w-full', plan.popular && 'bg-purple-600 hover:bg-purple-700')}
                   variant={plan.ctaVariant}
                   disabled={isCurrentPlan}
-                  onClick={() => {
-                    if (plan.id === 'agency') {
-                      window.location.href = 'mailto:sales@trendscout.ai?subject=Agency Plan Inquiry';
-                    } else if (plan.id !== 'free') {
-                      navigate(`/dashboard/checkout?plan=${plan.id}&billing=${isYearly ? 'yearly' : 'monthly'}`);
-                    }
-                  }}
+                  onClick={() => handlePlanClick(plan.id)}
                 >
                   {isCurrentPlan ? 'Current Plan' : plan.cta}
                 </Button>
@@ -395,12 +465,71 @@ export function Pricing() {
             <h2 className="text-2xl font-bold mb-4">Ready to go viral?</h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">Join thousands of creators who use Risko.ai to find trends, create viral content, and grow their audience.</p>
             <div className="flex items-center justify-center gap-4">
-              <Button size="lg" className="bg-purple-600 hover:bg-purple-700" onClick={() => navigate('/dashboard/checkout?plan=pro&billing=monthly')}>Start Pro Trial</Button>
+              <Button size="lg" className="bg-purple-600 hover:bg-purple-700" onClick={() => handlePlanClick('pro')}>Start Pro Trial</Button>
               <Button size="lg" variant="outline" onClick={() => navigate('/dashboard')}>Try Free</Button>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Dev Upgrade Modal */}
+      <Dialog open={showDevModal} onOpenChange={setShowDevModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-purple-500" />
+              Developer Access
+            </DialogTitle>
+            <DialogDescription>
+              Enter developer code to upgrade to <span className="font-semibold text-foreground">{selectedPlan.toUpperCase()}</span> plan.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Dev Code</label>
+              <Input
+                type="password"
+                placeholder="Enter developer code..."
+                value={devCode}
+                onChange={(e) => setDevCode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleDevUpgrade();
+                }}
+              />
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                ⚠️ This is a developer feature for testing purposes. In production, Stripe checkout will be used.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDevModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDevUpgrade}
+              disabled={isUpgrading || !devCode.trim()}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {isUpgrading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Upgrading...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Upgrade to {selectedPlan}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

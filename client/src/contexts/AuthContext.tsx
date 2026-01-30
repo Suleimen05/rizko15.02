@@ -48,6 +48,7 @@ interface AuthContextType extends AuthState {
   updateUserSettings: (settings: Partial<User['preferences']>) => void;
   getAccessToken: () => Promise<string | null>;
   refreshTokens: () => Promise<boolean>;
+  refreshUser: () => Promise<void>;
 }
 
 // =============================================================================
@@ -617,6 +618,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // ---------------------------------------------------------------------------
+  // Refresh User Data (for subscription updates, etc.)
+  // ---------------------------------------------------------------------------
+
+  const refreshUser = useCallback(async (): Promise<void> => {
+    const storedData = getStoredAuthData();
+    if (!storedData?.tokens?.accessToken) {
+      return;
+    }
+
+    try {
+      const profileResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${storedData.tokens.accessToken}`,
+        },
+      });
+
+      if (!profileResponse.ok) {
+        throw new Error('Failed to fetch user profile');
+      }
+
+      const profile = await profileResponse.json();
+
+      const updatedUser: User = {
+        id: profile.id,
+        email: profile.email,
+        name: profile.full_name || profile.email.split('@')[0],
+        avatar: profile.avatar_url || '',
+        subscription: profile.subscription_tier || 'free',
+        credits: profile.credits || 0,
+        preferences: state.user?.preferences || {
+          niches: [],
+          languages: ['en'],
+          regions: ['US'],
+        },
+      };
+
+      setState((prev) => ({
+        ...prev,
+        user: updatedUser,
+      }));
+
+      storeAuthData(storedData.tokens, updatedUser);
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+    }
+  }, [state.user?.preferences]);
+
+  // ---------------------------------------------------------------------------
   // Effects
   // ---------------------------------------------------------------------------
 
@@ -744,6 +793,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         updateUserSettings,
         getAccessToken,
         refreshTokens,
+        refreshUser,
       }}
     >
       {children}

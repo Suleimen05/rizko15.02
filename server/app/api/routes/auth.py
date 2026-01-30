@@ -363,3 +363,73 @@ async def sync_oauth_user(data: OAuthSyncRequest, db: Session = Depends(get_db))
         token_type="bearer",
         user=UserResponse.model_validate(user)
     )
+
+
+# =============================================================================
+# DEV MODE - SUBSCRIPTION UPGRADE (NO STRIPE)
+# =============================================================================
+
+class DevUpgradeRequest(BaseModel):
+    """Request for dev mode subscription upgrade."""
+    plan: str  # 'free', 'creator', 'pro', 'agency'
+    dev_code: str  # Secret dev code
+
+# Dev code for subscription changes (change this in production!)
+DEV_UPGRADE_CODE = "888"
+
+
+@router.post("/dev/upgrade")
+async def dev_upgrade_subscription(
+    data: DevUpgradeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    [DEV MODE] Upgrade user subscription without Stripe.
+
+    This endpoint is for development/testing purposes only.
+    Requires a secret dev code to prevent unauthorized access.
+
+    Args:
+        data: Plan and dev code
+        current_user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Updated user data
+    """
+    from ...db.models import SubscriptionTier
+
+    # Verify dev code
+    if data.dev_code != DEV_UPGRADE_CODE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid dev code"
+        )
+
+    # Validate plan
+    valid_plans = ['free', 'creator', 'pro', 'agency']
+    if data.plan.lower() not in valid_plans:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid plan. Must be one of: {', '.join(valid_plans)}"
+        )
+
+    # Map plan to tier enum
+    tier_map = {
+        'free': SubscriptionTier.FREE,
+        'creator': SubscriptionTier.CREATOR,
+        'pro': SubscriptionTier.PRO,
+        'agency': SubscriptionTier.AGENCY,
+    }
+
+    # Update user subscription
+    current_user.subscription_tier = tier_map[data.plan.lower()]
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "status": "success",
+        "message": f"Subscription updated to {data.plan.upper()}",
+        "user": UserResponse.model_validate(current_user)
+    }
