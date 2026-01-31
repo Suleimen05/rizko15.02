@@ -112,13 +112,13 @@ async def tiktok_callback(
     """Handle TikTok OAuth callback."""
     if error:
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard/connect?error={error}"
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error={error}"
         )
 
     state_data = verify_state(state)
     if not state_data:
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard/connect?error=invalid_state"
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error=invalid_state"
         )
 
     user_id = state_data["user_id"]
@@ -138,7 +138,7 @@ async def tiktok_callback(
 
     if token_response.status_code != 200:
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard/connect?error=token_exchange_failed"
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error=token_exchange_failed"
         )
 
     token_data = token_response.json()
@@ -201,7 +201,7 @@ async def tiktok_callback(
     db.commit()
 
     return RedirectResponse(
-        url=f"{FRONTEND_URL}/dashboard/connect?success=tiktok"
+        url=f"{FRONTEND_URL}/dashboard/connect-accounts?success=tiktok"
     )
 
 
@@ -244,13 +244,13 @@ async def instagram_callback(
     """Handle Instagram OAuth callback."""
     if error:
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard/connect?error={error}"
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error={error}"
         )
 
     state_data = verify_state(state)
     if not state_data:
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard/connect?error=invalid_state"
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error=invalid_state"
         )
 
     user_id = state_data["user_id"]
@@ -270,7 +270,7 @@ async def instagram_callback(
 
     if token_response.status_code != 200:
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard/connect?error=token_exchange_failed"
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error=token_exchange_failed"
         )
 
     token_data = token_response.json()
@@ -343,7 +343,7 @@ async def instagram_callback(
     db.commit()
 
     return RedirectResponse(
-        url=f"{FRONTEND_URL}/dashboard/connect?success=instagram"
+        url=f"{FRONTEND_URL}/dashboard/connect-accounts?success=instagram"
     )
 
 
@@ -388,13 +388,13 @@ async def youtube_callback(
     """Handle YouTube OAuth callback."""
     if error:
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard/connect?error={error}"
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error={error}"
         )
 
     state_data = verify_state(state)
     if not state_data:
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard/connect?error=invalid_state"
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error=invalid_state"
         )
 
     user_id = state_data["user_id"]
@@ -414,7 +414,7 @@ async def youtube_callback(
 
     if token_response.status_code != 200:
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/dashboard/connect?error=token_exchange_failed"
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error=token_exchange_failed"
         )
 
     token_data = token_response.json()
@@ -486,7 +486,7 @@ async def youtube_callback(
     db.commit()
 
     return RedirectResponse(
-        url=f"{FRONTEND_URL}/dashboard/connect?success=youtube"
+        url=f"{FRONTEND_URL}/dashboard/connect-accounts?success=youtube"
     )
 
 

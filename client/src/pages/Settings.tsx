@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTheme } from '@/contexts/ThemeContext';
+import { REVIEW_MODE } from '@/config/features';
 
 export function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
@@ -40,9 +41,9 @@ export function SettingsPage() {
       <Tabs defaultValue="general" className="w-full">
         <TabsList className="flex-wrap">
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          {!REVIEW_MODE && <TabsTrigger value="notifications">Notifications</TabsTrigger>}
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
-          <TabsTrigger value="billing">Billing</TabsTrigger>
+          {!REVIEW_MODE && <TabsTrigger value="billing">Billing</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="general" className="space-y-4">
@@ -94,54 +95,58 @@ export function SettingsPage() {
                   onCheckedChange={toggleTheme}
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Auto-generate Scripts</Label>
-                  <p className="text-sm text-muted-foreground">Automatically create scripts from trending videos</p>
-                </div>
-                <Switch
-                  checked={preferences.autoGenerateScripts}
-                  onCheckedChange={(checked) =>
-                    setPreferences({ ...preferences, autoGenerateScripts: checked })
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="language">Language</Label>
-                  <select
-                    id="language"
-                    className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"
-                    value={preferences.language}
-                    onChange={(e) =>
-                      setPreferences({ ...preferences, language: e.target.value })
+              {!REVIEW_MODE && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Auto-generate Scripts</Label>
+                    <p className="text-sm text-muted-foreground">Automatically create scripts from trending videos</p>
+                  </div>
+                  <Switch
+                    checked={preferences.autoGenerateScripts}
+                    onCheckedChange={(checked) =>
+                      setPreferences({ ...preferences, autoGenerateScripts: checked })
                     }
-                  >
-                    <option value="en">English</option>
-                    <option value="es">Spanish</option>
-                    <option value="fr">French</option>
-                    <option value="de">German</option>
-                  </select>
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="region">Region</Label>
-                  <select
-                    id="region"
-                    className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"
-                    value={preferences.region}
-                    onChange={(e) =>
-                      setPreferences({ ...preferences, region: e.target.value })
-                    }
-                  >
-                    <option value="US">United States</option>
-                    <option value="UK">United Kingdom</option>
-                    <option value="CA">Canada</option>
-                    <option value="AU">Australia</option>
-                    <option value="DE">Germany</option>
-                    <option value="FR">France</option>
-                  </select>
+              )}
+              {!REVIEW_MODE && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="language">Language</Label>
+                    <select
+                      id="language"
+                      className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"
+                      value={preferences.language}
+                      onChange={(e) =>
+                        setPreferences({ ...preferences, language: e.target.value })
+                      }
+                    >
+                      <option value="en">English</option>
+                      <option value="es">Spanish</option>
+                      <option value="fr">French</option>
+                      <option value="de">German</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="region">Region</Label>
+                    <select
+                      id="region"
+                      className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm"
+                      value={preferences.region}
+                      onChange={(e) =>
+                        setPreferences({ ...preferences, region: e.target.value })
+                      }
+                    >
+                      <option value="US">United States</option>
+                      <option value="UK">United Kingdom</option>
+                      <option value="CA">Canada</option>
+                      <option value="AU">Australia</option>
+                      <option value="DE">Germany</option>
+                      <option value="FR">France</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

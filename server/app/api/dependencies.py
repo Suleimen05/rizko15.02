@@ -194,6 +194,7 @@ rate_limiter = RateLimiter()
 # =============================================================================
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
@@ -205,7 +206,12 @@ async def get_current_user(
     - Checks user exists and is active
     - No sensitive data in error messages
 
+    Supports tokens from:
+    - Authorization header (Bearer token)
+    - Query parameter (?token=...) for OAuth redirects
+
     Args:
+        request: FastAPI Request object
         credentials: HTTP Bearer token from Authorization header
         db: Database session
 
@@ -216,16 +222,22 @@ async def get_current_user(
         HTTPException: 401 if token is invalid or user not found
         HTTPException: 403 if user account is disabled
     """
-    # Check if credentials provided
-    if credentials is None:
+    token = None
+
+    # First try Authorization header
+    if credentials is not None:
+        token = credentials.credentials
+    # Then try query parameter (for OAuth redirects)
+    elif "token" in request.query_params:
+        token = request.query_params.get("token")
+
+    # Check if token provided
+    if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    # Extract and decode token
-    token = credentials.credentials
     payload = decode_token(token)
 
     if payload is None:

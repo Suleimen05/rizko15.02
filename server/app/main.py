@@ -34,7 +34,7 @@ from .db import models
 
 # API Routers - Updated with new enterprise routes
 from .api import trends, profiles, competitors, ai_scripts, proxy, favorites
-from .api.routes import auth
+from .api.routes import auth, oauth
 
 # Background Scheduler
 from .services.scheduler import start_scheduler
@@ -199,6 +199,13 @@ app.include_router(
     proxy.router,
     prefix="/api/proxy",
     tags=["Proxy"]
+)
+
+# OAuth routes (for social media account connections)
+app.include_router(
+    oauth.router,
+    prefix="/api/oauth",
+    tags=["OAuth"]
 )
 
 

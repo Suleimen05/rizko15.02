@@ -14,13 +14,39 @@ import {
   Star,
   Quote,
   Sun,
-  Moon
+  Moon,
+  Link2,
+  LineChart,
 } from 'lucide-react';
 import Hero3D from '@/components/3d/Hero3D';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
+import { REVIEW_MODE } from '@/config/features';
 
-const features = [
+// Features for REVIEW_MODE (Official API only)
+const reviewModeFeatures = [
+  {
+    icon: Link2,
+    title: 'Connect Your Accounts',
+    description: 'Securely link your TikTok, Instagram, and YouTube accounts using official OAuth authentication.',
+    color: '#8b5cf6',
+  },
+  {
+    icon: LineChart,
+    title: 'Personal Analytics',
+    description: 'View detailed statistics for all your videos including views, likes, comments, and engagement rates.',
+    color: '#3b82f6',
+  },
+  {
+    icon: Bot,
+    title: 'AI-Powered Insights',
+    description: 'Get personalized recommendations powered by Gemini AI to improve your content strategy and grow your audience.',
+    color: '#10b981',
+  },
+];
+
+// Features for full version
+const fullFeatures = [
   {
     icon: TrendingUp,
     title: 'AI Trend Detection',
@@ -59,7 +85,35 @@ const features = [
   },
 ];
 
-const plans = [
+const features = REVIEW_MODE ? reviewModeFeatures : fullFeatures;
+
+// Plans for REVIEW_MODE (simpler, focused on analytics)
+const reviewModePlans = [
+  {
+    name: 'Free',
+    price: 0,
+    description: 'Get started with basic analytics',
+    features: ['Connect 1 social account', 'Basic video statistics', 'Weekly insights email', 'Community support'],
+    highlighted: false,
+  },
+  {
+    name: 'Creator',
+    price: 9,
+    description: 'For growing creators',
+    features: ['Connect all platforms', 'Full video analytics', 'AI-powered insights', 'Priority support'],
+    highlighted: true,
+  },
+  {
+    name: 'Pro',
+    price: 29,
+    description: 'For serious creators',
+    features: ['Everything in Creator', 'Advanced AI recommendations', 'Export reports', 'API access'],
+    highlighted: false,
+  },
+];
+
+// Plans for full version
+const fullPlans = [
   {
     name: 'Starter',
     price: 19,
@@ -83,7 +137,35 @@ const plans = [
   },
 ];
 
-const testimonials = [
+const plans = REVIEW_MODE ? reviewModePlans : fullPlans;
+
+// Testimonials for REVIEW_MODE
+const reviewModeTestimonials = [
+  {
+    name: 'Alex Kim',
+    role: 'TikTok Creator',
+    followers: '150K',
+    content: 'Finally, a simple way to see all my analytics in one place! The AI insights helped me understand what content works best.',
+    avatar: 'AK',
+  },
+  {
+    name: 'Jessica Taylor',
+    role: 'Instagram Influencer',
+    followers: '320K',
+    content: 'Connecting my accounts was super easy and secure. Love seeing my performance across all platforms!',
+    avatar: 'JT',
+  },
+  {
+    name: 'David Chen',
+    role: 'YouTube Creator',
+    followers: '75K',
+    content: 'The personalized recommendations have really helped me improve my content strategy. Great tool for any creator!',
+    avatar: 'DC',
+  },
+];
+
+// Testimonials for full version
+const fullTestimonials = [
   {
     name: 'Sarah Chen',
     role: 'Content Creator',
@@ -106,6 +188,8 @@ const testimonials = [
     avatar: 'ER',
   },
 ];
+
+const testimonials = REVIEW_MODE ? reviewModeTestimonials : fullTestimonials;
 
 export function LandingPage() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -464,21 +548,25 @@ export function LandingPage() {
             transition={{ duration: 0.8 }}
           >
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-              Ready to Go Viral?
+              {REVIEW_MODE ? 'Ready to Grow Your Audience?' : 'Ready to Go Viral?'}
             </h2>
             <p className="text-lg text-white/80 mb-8 max-w-2xl mx-auto">
-              Join thousands of creators who are already using Risko.ai to discover trends, create viral content, and grow their audience.
+              {REVIEW_MODE
+                ? 'Connect your social accounts and get AI-powered insights to improve your content strategy.'
+                : 'Join thousands of creators who are already using Risko.ai to discover trends, create viral content, and grow their audience.'}
             </p>
             <Link
               to="/login"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-white text-blue-600 font-semibold hover:bg-gray-100 transition-all hover:scale-105"
             >
-              Start Your Free Trial
+              {REVIEW_MODE ? 'Get Started Free' : 'Start Your Free Trial'}
               <ArrowRight className="w-5 h-5" />
             </Link>
-            <p className="mt-4 text-sm text-white/60">
-              No credit card required. 14-day free trial.
-            </p>
+            {!REVIEW_MODE && (
+              <p className="mt-4 text-sm text-white/60">
+                No credit card required. 14-day free trial.
+              </p>
+            )}
           </motion.div>
         </div>
       </section>

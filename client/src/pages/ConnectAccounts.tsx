@@ -60,7 +60,7 @@ export function ConnectAccountsPage() {
     try {
       setLoading(true);
       const accessToken = await getAccessToken();
-      const response = await fetch(`${API_BASE}/api/oauth/accounts`, {
+      const response = await fetch(`${API_BASE}/oauth/accounts`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },
@@ -98,9 +98,24 @@ export function ConnectAccountsPage() {
   const handleConnect = async (platform: string) => {
     setConnecting(platform);
 
-    // Редирект на OAuth endpoint
-    const oauthUrl = `${API_BASE}/api/oauth/${platform}`;
-    window.location.href = oauthUrl;
+    try {
+      // Получаем токен для авторизации
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        toast.error('Please log in to connect your account');
+        setConnecting(null);
+        return;
+      }
+
+      // Редирект на OAuth endpoint с токеном в query параметре
+      // API_BASE уже содержит /api, поэтому добавляем только /oauth/
+      const oauthUrl = `${API_BASE}/oauth/${platform}?token=${encodeURIComponent(accessToken)}`;
+      window.location.href = oauthUrl;
+    } catch (error) {
+      console.error('Failed to initiate OAuth:', error);
+      toast.error('Failed to connect. Please try again.');
+      setConnecting(null);
+    }
   };
 
   // Обработчик отключения
@@ -112,7 +127,7 @@ export function ConnectAccountsPage() {
 
     try {
       const accessToken = await getAccessToken();
-      const response = await fetch(`${API_BASE}/api/oauth/accounts/${account.id}`, {
+      const response = await fetch(`${API_BASE}/oauth/accounts/${account.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,

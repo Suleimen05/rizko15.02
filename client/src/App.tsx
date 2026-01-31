@@ -24,9 +24,13 @@ import { Help } from '@/pages/Help';
 import { Pricing } from '@/pages/Pricing';
 import { UsagePolicy } from '@/pages/UsagePolicy';
 import { PrivacyPolicy } from '@/pages/PrivacyPolicy';
+import { DataDeletion } from '@/pages/DataDeletion';
 import { Marketplace } from '@/pages/Marketplace';
 import { Feedback } from '@/pages/Feedback';
 import { Saved } from '@/pages/Saved';
+import { MyVideosPage } from '@/pages/MyVideos';
+import { ConnectAccountsPage } from '@/pages/ConnectAccounts';
+import { OAuthCallback } from '@/pages/OAuthCallback';
 import { useAppState } from '@/hooks/useAppState';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -103,6 +107,8 @@ function DashboardLayout() {
             <div className="container mx-auto px-4 md:px-6 py-6 md:pt-8 max-w-7xl">
               <Routes>
                 <Route path="/" element={<Dashboard />} />
+                <Route path="/my-videos" element={<MyVideosPage />} />
+                <Route path="/connect-accounts" element={<ConnectAccountsPage />} />
                 <Route path="/trending" element={<Trending />} />
                 <Route path="/discover" element={<Discover />} />
                 <Route path="/discover/*" element={<Discover />} />
@@ -116,6 +122,7 @@ function DashboardLayout() {
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/usage-policy" element={<UsagePolicy />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/data-deletion" element={<DataDeletion />} />
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/feedback" element={<Feedback />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -141,6 +148,7 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
 
             {/* Protected dashboard routes */}
             <Route

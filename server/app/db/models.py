@@ -617,6 +617,14 @@ class UserAccount(Base):
     is_verified = Column(Boolean, default=False, nullable=False)  # OAuth verified
     is_primary = Column(Boolean, default=False, nullable=False)  # Primary account
 
+    # OAuth Token Storage
+    platform_user_id = Column(String(255), nullable=True)  # Platform-specific user ID (open_id, channel_id, etc.)
+    oauth_access_token = Column(Text, nullable=True)  # Encrypted in production
+    oauth_refresh_token = Column(Text, nullable=True)  # Encrypted in production
+    oauth_token_expires_at = Column(DateTime, nullable=True)
+    oauth_scope = Column(String(500), nullable=True)  # Granted scopes
+    oauth_connected_at = Column(DateTime, nullable=True)  # When OAuth was connected
+
     # User notes
     notes = Column(Text, nullable=True)
     tags = Column(JSONB, default=[], nullable=False)

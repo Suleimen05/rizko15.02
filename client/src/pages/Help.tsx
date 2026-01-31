@@ -1,8 +1,30 @@
 import { HelpCircle, MessageCircle, BookOpen, Video, Mail, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { REVIEW_MODE } from '@/config/features';
 
-const faqItems = [
+// FAQ items for REVIEW_MODE (Official API only)
+const reviewModeFaqItems = [
+  {
+    question: 'How do I connect my social media accounts?',
+    answer: 'Go to "Connect Accounts" in the sidebar, then click on the platform you want to connect (TikTok, Instagram, or YouTube). You\'ll be redirected to authorize access through the official platform login.',
+  },
+  {
+    question: 'What analytics can I see after connecting?',
+    answer: 'Once connected, you can view your video performance metrics including views, likes, comments, and follower growth. Our AI provides personalized insights to help improve your content strategy.',
+  },
+  {
+    question: 'Is my data secure?',
+    answer: 'Yes! We use official platform APIs with OAuth authentication. We only access your public profile and video statistics. We never post on your behalf or access private messages.',
+  },
+  {
+    question: 'Can I disconnect my accounts?',
+    answer: 'Yes, you can disconnect any linked account at any time from the "Connect Accounts" page. Your data will be removed from our system.',
+  },
+];
+
+// FAQ items for full version
+const fullFaqItems = [
   {
     question: 'How do I generate an AI script from a trending video?',
     answer: 'Simply click on any trending video and select "Generate AI Script". Our AI will analyze the video and create a unique script tailored to your brand and tone.',
@@ -29,7 +51,20 @@ const faqItems = [
   },
 ];
 
-const guides = [
+const faqItems = REVIEW_MODE ? reviewModeFaqItems : fullFaqItems;
+
+// Guides for REVIEW_MODE
+const reviewModeGuides = [
+  {
+    title: 'Getting Started Guide',
+    description: 'Learn how to connect your accounts and view your analytics',
+    icon: BookOpen,
+    duration: '3 min read',
+  },
+];
+
+// Guides for full version
+const fullGuides = [
   {
     title: 'Getting Started Guide',
     description: 'Learn the basics of finding viral trends and generating scripts',
@@ -50,6 +85,8 @@ const guides = [
   },
 ];
 
+const guides = REVIEW_MODE ? reviewModeGuides : fullGuides;
+
 export function Help() {
   return (
     <div className="space-y-8">
@@ -60,7 +97,7 @@ export function Help() {
           Help & Support
         </h1>
         <p className="text-muted-foreground mt-2">
-          Get answers to your questions and learn how to use ViralTrend AI
+          Get answers to your questions and learn how to use Risko.ai
         </p>
       </div>
 

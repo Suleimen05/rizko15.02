@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
   Mail,
   Settings,
   ChevronRight,
+  Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -24,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiClient } from '@/services/api';
 import { toast } from 'sonner';
+import { REVIEW_MODE } from '@/config/features';
 
 // Platform icons
 const platforms = [
@@ -120,6 +123,7 @@ const USE_MOCK_DATA = true;
 
 export function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<UserAccount[]>(USE_MOCK_DATA ? [MOCK_ACCOUNT] : []);
   const [selectedPlatform, setSelectedPlatform] = useState('tiktok');
   const [isLoading, setIsLoading] = useState(!USE_MOCK_DATA);
@@ -127,6 +131,164 @@ export function Dashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+
+  // ===== REVIEW MODE DASHBOARD =====
+  // Simplified dashboard for API Review (TikTok, Meta, Google)
+  // Design based on screenshot: Stats cards + AI Insights + Get Started
+  if (REVIEW_MODE) {
+    // TODO: Get real connected accounts count from API/context
+    const connectedCount = 0;
+    const totalPlatforms = 3;
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Your personal analytics hub with AI-powered insights
+          </p>
+        </div>
+
+        {/* Stats Cards Row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Connected */}
+          <Card className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <Link2 className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Connected</p>
+                <p className="text-2xl font-bold">{connectedCount} / {totalPlatforms}</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Followers */}
+          <Card className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Followers</p>
+                <p className="text-2xl font-bold">—</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Total Views */}
+          <Card className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                <Eye className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Views</p>
+                <p className="text-2xl font-bold">—</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Videos */}
+          <Card className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <Video className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Videos</p>
+                <p className="text-2xl font-bold">—</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* AI Insights Section */}
+        <Card className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 border-purple-200 dark:border-purple-800">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🤖</span>
+              <h3 className="font-semibold text-lg">AI Insights</h3>
+            </div>
+            <Badge variant="outline" className="text-purple-600 border-purple-300">
+              Powered by Gemini
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Insight 1 - Connect */}
+            <div className="p-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">💡</span>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium">Connect Social Accounts</span>
+                    <Badge className="bg-red-500 text-white text-[10px] px-1.5">Priority</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Linking accounts will unlock cross-promotion and analytics insights for optimized growth.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Insight 2 - Analyze */}
+            <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">📊</span>
+                <div>
+                  <span className="font-medium">Analyze Competitors</span>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Identify top-performing content in your niche and adapt those themes to attract viewers.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Insight 3 - Test */}
+            <div className="p-4 rounded-xl bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">🎯</span>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium">Test Posting Times</span>
+                    <Badge className="bg-red-500 text-white text-[10px] px-1.5">Priority</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Since there's no data, experiment with different posting times daily for a week, then analyze peak performance.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Get Started Card */}
+        <Card className="p-8">
+          <div className="text-center max-w-lg mx-auto">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+              <Link2 className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Get Started</h2>
+            <p className="text-muted-foreground mb-6">
+              Connect your TikTok, Instagram, or YouTube account to unlock personalized AI insights and detailed analytics.
+            </p>
+            <Button
+              size="lg"
+              className="bg-black hover:bg-gray-800 text-white gap-2"
+              onClick={() => navigate('/dashboard/connect-accounts')}
+            >
+              <Plus className="h-5 w-5" />
+              Connect Your First Account
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+  // ===== END REVIEW MODE DASHBOARD =====
 
   // Load user accounts
   useEffect(() => {
