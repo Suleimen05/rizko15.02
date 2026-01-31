@@ -13,6 +13,7 @@ import hashlib
 import base64
 import httpx
 from datetime import datetime, timedelta
+from typing import Optional
 from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import RedirectResponse
@@ -84,7 +85,7 @@ def generate_state(user_id: int, platform: str, code_verifier: str = None) -> st
     return state
 
 
-def verify_state(state: str) -> dict | None:
+def verify_state(state: str) -> Optional[dict]:
     """Verify and consume state parameter."""
     if state not in oauth_states:
         return None
