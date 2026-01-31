@@ -123,7 +123,6 @@ export function DeepAnalyzeProgress({ isActive }: DeepAnalyzeProgressProps) {
         {/* Steps Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {STEPS.map((step, index) => {
-            const StepIcon = step.icon;
             const isActiveStep = index === currentStep;
             const isCompleted = index < currentStep;
 

@@ -1,9 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Send,
-  Sparkles,
-  Copy,
-  Download,
   Paperclip,
   ChevronDown,
   Mic,
@@ -14,7 +11,6 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
-  GripVertical,
   Video,
   Building2,
   Search,
@@ -24,16 +20,11 @@ import {
   MessageSquare,
   FileText,
   LayoutGrid,
-  Eye,
-  Heart,
-  Share2,
-  TrendingUp,
   Loader2,
   FolderOpen,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -238,7 +229,7 @@ const platformIcons: Record<string, string> = {
 // ============================================================================
 
 export function WorkflowBuilder() {
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
 
   // Canvas state
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);

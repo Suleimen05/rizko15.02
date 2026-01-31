@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Bookmark, Search, Filter, Trash2, Tag, ExternalLink, Eye, Heart, Share2, TrendingUp, Loader2, FolderOpen } from 'lucide-react';
+import { Bookmark, Search, Trash2, Tag, ExternalLink, Eye, Heart, Share2, TrendingUp, Loader2, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -50,7 +50,7 @@ interface SavedTrend {
 }
 
 export function Saved() {
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   const [favorites, setFavorites] = useState<SavedTrend[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');

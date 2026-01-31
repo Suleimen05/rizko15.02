@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { Play, Heart, MessageCircle, Share2, Eye, Bookmark, Sparkles, TrendingUp, Music, ExternalLink, Info, Flame, Copy, Wand2, Loader2, Check, Lock, ArrowRight, Bot, Send, User } from 'lucide-react';
+import { Play, Heart, MessageCircle, Share2, Eye, Bookmark, Sparkles, TrendingUp, Music, ExternalLink, Info, Flame, Copy, Wand2, Loader2, Check, Bot, Send, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+// Alert components removed - unused
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,7 @@ interface VideoCardProps {
 export function VideoCard({
   video,
   mode = 'light',
-  showUpgradePrompt = false,
+  showUpgradePrompt: _showUpgradePrompt = false,
   onGenerateScript,
   onSave,
   showStats = true,
@@ -47,7 +47,7 @@ export function VideoCard({
   const [isPlaying, setIsPlaying] = useState(false);
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [showDeepMetrics, setShowDeepMetrics] = useState(false);
+  const [_showDeepMetrics, _setShowDeepMetrics] = useState(false);
   
   // AI Chat state
   const [showAIChat, setShowAIChat] = useState(false);
@@ -462,8 +462,8 @@ UTS Score: ${video.uts_score || video.viralScore || 0}
           {video.hashtags && video.hashtags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {video.hashtags.slice(0, 3).map((hashtag) => (
-                <Badge key={hashtag?.id || hashtag?.name} variant="outline" className="text-xs">
-                  #{hashtag?.name || hashtag}
+                <Badge key={typeof hashtag === 'string' ? hashtag : hashtag?.id || hashtag?.name} variant="outline" className="text-xs">
+                  #{typeof hashtag === 'string' ? hashtag : hashtag?.name}
                 </Badge>
               ))}
             </div>

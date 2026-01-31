@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, TrendingUp, TrendingDown, Search, Filter, X, Check, Loader2 } from 'lucide-react';
+import { Users, UserPlus, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
-import type { Competitor, TikTokVideo } from '@/types';
+import type { Competitor } from '@/types';
 import { toast } from 'sonner';
 import { apiClient } from '@/services/api';
 
@@ -101,9 +100,9 @@ export function Competitors() {
   const [searchResults, setSearchResults] = useState<any>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterPlatform, setFilterPlatform] = useState<'all' | 'tiktok' | 'instagram'>('all');
-  const [filterSort, setFilterSort] = useState<'recent' | 'followers' | 'engagement'>('recent');
+  const [_showFilters, _setShowFilters] = useState(false);
+  const [_filterPlatform, _setFilterPlatform] = useState<'all' | 'tiktok' | 'instagram'>('all');
+  const [_filterSort, _setFilterSort] = useState<'recent' | 'followers' | 'engagement'>('recent');
 
   // Загрузить список competitors из API
   const loadCompetitors = async () => {

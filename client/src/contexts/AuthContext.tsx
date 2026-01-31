@@ -55,7 +55,7 @@ interface AuthContextType extends AuthState {
 // CONSTANTS
 // =============================================================================
 
-const AUTH_STORAGE_KEY = 'risko_auth';
+const AUTH_STORAGE_KEY = 'rizko_auth';
 const TOKEN_REFRESH_MARGIN = 5 * 60 * 1000; // Refresh 5 min before expiry
 
 // API Base URL - must include /api prefix to match backend routes
@@ -164,7 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isLoading: true,
   });
 
-  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ---------------------------------------------------------------------------
   // Token Refresh Logic

@@ -51,7 +51,7 @@ export function ComingSoonModal({ isOpen, onClose, type }: ComingSoonModalProps)
 
     try {
       // Save to Supabase
-      const { error: supabaseError } = await supabase
+      const { error: _supabaseError } = await supabase
         .from('waitlist')
         .insert([{
           email: user?.email || 'anonymous',
