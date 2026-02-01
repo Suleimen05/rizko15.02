@@ -2,6 +2,7 @@
 Authentication routes for user registration, login, and token management.
 Production-ready implementation with proper error handling and security.
 """
+import os
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -386,8 +387,9 @@ class DevUpgradeRequest(BaseModel):
     plan: str  # 'free', 'creator', 'pro', 'agency'
     dev_code: str  # Secret dev code
 
-# Dev code for subscription changes (change this in production!)
-DEV_UPGRADE_CODE = "888"
+# Dev code for subscription changes - MUST be set in environment!
+# Never hardcode the actual code in source control
+DEV_UPGRADE_CODE = os.getenv("DEV_UPGRADE_CODE", "")
 
 
 @router.post("/dev/upgrade")

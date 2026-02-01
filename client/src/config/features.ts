@@ -12,8 +12,9 @@
 export const REVIEW_MODE = import.meta.env.VITE_REVIEW_MODE === 'true';
 
 // Developer Access - защита паролем на время разработки
+// ВАЖНО: Пароль ТОЛЬКО из environment variable, без fallback в коде!
 export const DEV_ACCESS_ENABLED = import.meta.env.VITE_DEV_ACCESS === 'true';
-export const DEV_ACCESS_PASSWORD = import.meta.env.VITE_DEV_PASSWORD || 'rizko2026';
+export const DEV_ACCESS_PASSWORD = import.meta.env.VITE_DEV_PASSWORD || '';
 
 // Feature flags
 export const features = {
