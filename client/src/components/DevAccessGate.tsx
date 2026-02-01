@@ -1,94 +1,68 @@
-import { useState, useEffect, type ReactNode } from 'react';
-import { Lock } from 'lucide-react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useState, useEffect } from 'react';
+import { DEV_ACCESS_ENABLED, DEV_ACCESS_PASSWORD } from '@/config/features';
 
-interface DevAccessGateProps {
-  children: ReactNode;
-  pageName: string;
-}
+const STORAGE_KEY = 'rizko_dev_access';
 
-const DEV_CODE = '888';
-const STORAGE_KEY = 'dev_access_granted';
-
-export function DevAccessGate({ children, pageName }: DevAccessGateProps) {
-  const [code, setCode] = useState('');
+export function DevAccessGate({ children }: { children: React.ReactNode }) {
   const [hasAccess, setHasAccess] = useState(false);
-  const [error, setError] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    // Check if user already has access
-    const accessGranted = sessionStorage.getItem(STORAGE_KEY);
-    if (accessGranted === 'true') {
+    if (!DEV_ACCESS_ENABLED) {
       setHasAccess(true);
+      return;
     }
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === 'true') setHasAccess(true);
   }, []);
+
+  if (hasAccess) return <>{children}</>;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (code === DEV_CODE) {
+    if (password === DEV_ACCESS_PASSWORD) {
+      localStorage.setItem(STORAGE_KEY, 'true');
       setHasAccess(true);
-      sessionStorage.setItem(STORAGE_KEY, 'true');
-      setError('');
     } else {
-      setError('Invalid access code');
-      setCode('');
+      setError(true);
+      setTimeout(() => setError(false), 1500);
     }
   };
 
-  if (hasAccess) {
-    return <>{children}</>;
-  }
-
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <Card className="w-full max-w-md p-8">
-        <div className="flex flex-col items-center text-center space-y-6">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <Lock className="h-8 w-8 text-white" />
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold">Developer Access Required</h2>
-            <p className="text-muted-foreground">
-              The <span className="font-semibold">{pageName}</span> page is currently under development.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Enter the developer access code to continue.
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="w-full space-y-4">
-            <div>
-              <Input
-                type="password"
-                placeholder="Enter access code"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="text-center text-lg tracking-widest"
-                maxLength={3}
-                autoFocus
-              />
-              {error && (
-                <p className="text-sm text-red-500 mt-2">{error}</p>
-              )}
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-            >
-              Unlock Page
-            </Button>
-          </form>
-
-          <div className="text-xs text-muted-foreground pt-4 border-t w-full">
-            This page is restricted to developers and internal testers only.
-          </div>
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600" />
+          <h1 className="text-xl font-bold text-white">Developer Access</h1>
+          <p className="text-gray-500 text-sm mt-1">Enter password to continue</p>
         </div>
-      </Card>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          autoFocus
+          className={`w-full px-4 py-3 rounded-lg bg-gray-900 border text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            error ? 'border-red-500 shake' : 'border-gray-800'
+          }`}
+        />
+        <button
+          type="submit"
+          className="w-full mt-4 px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
+        >
+          Access
+        </button>
+      </form>
+      <style>{`
+        .shake { animation: shake 0.3s ease-in-out; }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
+        }
+      `}</style>
     </div>
   );
 }

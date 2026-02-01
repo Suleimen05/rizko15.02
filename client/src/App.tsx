@@ -24,6 +24,8 @@ import { Help } from '@/pages/Help';
 import { Pricing } from '@/pages/Pricing';
 import { UsagePolicy } from '@/pages/UsagePolicy';
 import { PrivacyPolicy } from '@/pages/PrivacyPolicy';
+import { TermsOfService } from '@/pages/TermsOfService';
+import { DataPolicy } from '@/pages/DataPolicy';
 import { DataDeletion } from '@/pages/DataDeletion';
 import { Marketplace } from '@/pages/Marketplace';
 import { Feedback } from '@/pages/Feedback';
@@ -33,6 +35,7 @@ import { ConnectAccountsPage } from '@/pages/ConnectAccounts';
 import { OAuthCallback } from '@/pages/OAuthCallback';
 import { useAppState } from '@/hooks/useAppState';
 import { Toaster } from '@/components/ui/sonner';
+import { DevAccessGate } from '@/components/DevAccessGate';
 
 // Protected Route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -49,7 +52,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
           <div className="w-16 h-16 mx-auto mb-4">
             <div className="w-full h-full rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 animate-pulse" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Risko.ai</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Rizko.ai</h1>
           <p className="text-gray-500 dark:text-gray-400">Loading your dashboard...</p>
         </motion.div>
       </div>
@@ -140,15 +143,22 @@ function DashboardLayout() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
-          <Routes>
+    <DevAccessGate>
+      <BrowserRouter>
+        <ThemeProvider>
+          <AuthProvider>
+            <Routes>
             {/* Public routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
+
+            {/* Public legal & support pages */}
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
+            <Route path="/data-policy" element={<DataPolicy />} />
+            <Route path="/help" element={<Help />} />
 
             {/* Protected dashboard routes */}
             <Route
@@ -166,6 +176,7 @@ function App() {
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
+  </DevAccessGate>
   );
 }
 

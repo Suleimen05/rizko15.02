@@ -11,6 +11,10 @@
 // Читаем из environment variable
 export const REVIEW_MODE = import.meta.env.VITE_REVIEW_MODE === 'true';
 
+// Developer Access - защита паролем на время разработки
+export const DEV_ACCESS_ENABLED = import.meta.env.VITE_DEV_ACCESS === 'true';
+export const DEV_ACCESS_PASSWORD = import.meta.env.VITE_DEV_PASSWORD || 'rizko2026';
+
 // Feature flags
 export const features = {
   // ===== ВСЕГДА ВКЛЮЧЕНО (для Review) =====
