@@ -28,9 +28,15 @@ const YouTubeIcon = () => (
   </svg>
 );
 
+const TwitterIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </svg>
+);
+
 interface ConnectedAccount {
   id?: number;
-  platform: 'tiktok' | 'instagram' | 'youtube';
+  platform: 'tiktok' | 'instagram' | 'youtube' | 'twitter';
   connected: boolean;
   username?: string;
   followers?: number;
@@ -48,6 +54,7 @@ export function ConnectAccountsPage() {
     { platform: 'tiktok', connected: false },
     { platform: 'instagram', connected: false },
     { platform: 'youtube', connected: false },
+    { platform: 'twitter', connected: false },
   ]);
 
   const [connecting, setConnecting] = useState<string | null>(null);
@@ -192,6 +199,12 @@ export function ConnectAccountsPage() {
       color: 'bg-red-600 text-white',
       description: 'Connect your YouTube channel to analyze videos and shorts performance.',
     },
+    twitter: {
+      name: 'X (Twitter)',
+      icon: TwitterIcon,
+      color: 'bg-black text-white',
+      description: 'Connect your X account to track tweets and engagement metrics.',
+    },
   };
 
   const connectedCount = accounts.filter(a => a.connected).length;
@@ -227,7 +240,7 @@ export function ConnectAccountsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Connected Accounts</p>
-              <p className="text-2xl font-bold">{connectedCount} of 3</p>
+              <p className="text-2xl font-bold">{connectedCount} of 4</p>
             </div>
             <div className="flex gap-2">
               {accounts.map(acc => (
@@ -244,7 +257,7 @@ export function ConnectAccountsPage() {
       </Card>
 
       {/* Platform Cards */}
-      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {accounts.map(account => {
           const config = platformConfig[account.platform];
           const Icon = config.icon;

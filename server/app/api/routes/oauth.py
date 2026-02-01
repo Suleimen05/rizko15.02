@@ -47,6 +47,11 @@ YOUTUBE_CLIENT_ID = os.getenv("YOUTUBE_CLIENT_ID", "")
 YOUTUBE_CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET", "")
 YOUTUBE_REDIRECT_URI = f"{BACKEND_URL}/api/oauth/youtube/callback"
 
+# Twitter/X OAuth 2.0
+TWITTER_CLIENT_ID = os.getenv("TWITTER_CLIENT_ID", "")
+TWITTER_CLIENT_SECRET = os.getenv("TWITTER_CLIENT_SECRET", "")
+TWITTER_REDIRECT_URI = f"{BACKEND_URL}/api/oauth/twitter/callback"
+
 # State storage (use Redis in production)
 oauth_states: dict = {}
 
@@ -535,6 +540,162 @@ async def youtube_callback(
 
     return RedirectResponse(
         url=f"{FRONTEND_URL}/dashboard/connect-accounts?success=youtube"
+    )
+
+
+# =============================================================================
+# TWITTER/X OAUTH 2.0
+# =============================================================================
+
+@router.get("/twitter")
+async def twitter_auth(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Initiate Twitter/X OAuth 2.0 flow with PKCE.
+    Twitter requires PKCE for public clients.
+    """
+    if not TWITTER_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Twitter OAuth not configured"
+        )
+
+    # Generate PKCE code verifier and challenge
+    code_verifier = generate_code_verifier()
+    code_challenge = generate_code_challenge(code_verifier)
+
+    # Store code_verifier with state for later use in callback
+    state = generate_state(current_user.id, "twitter", code_verifier)
+
+    # Twitter OAuth 2.0 URL with PKCE
+    params = {
+        "response_type": "code",
+        "client_id": TWITTER_CLIENT_ID,
+        "redirect_uri": TWITTER_REDIRECT_URI,
+        "scope": "tweet.read users.read offline.access",
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256"
+    }
+    auth_url = f"https://twitter.com/i/oauth2/authorize?{urlencode(params)}"
+
+    return RedirectResponse(url=auth_url)
+
+
+@router.get("/twitter/callback")
+async def twitter_callback(
+    code: str = Query(None),
+    state: str = Query(None),
+    error: str = Query(None),
+    error_description: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Handle Twitter/X OAuth 2.0 callback with PKCE verification."""
+    if error:
+        error_msg = error_description or error
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error={error_msg}"
+        )
+
+    state_data = verify_state(state)
+    if not state_data:
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error=invalid_state"
+        )
+
+    user_id = state_data["user_id"]
+    code_verifier = state_data.get("code_verifier")
+
+    # Exchange code for access token (with PKCE code_verifier)
+    async with httpx.AsyncClient() as client:
+        # Twitter requires Basic Auth with client credentials
+        auth_header = base64.b64encode(
+            f"{TWITTER_CLIENT_ID}:{TWITTER_CLIENT_SECRET}".encode()
+        ).decode()
+
+        token_response = await client.post(
+            "https://api.twitter.com/2/oauth2/token",
+            headers={
+                "Authorization": f"Basic {auth_header}",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            data={
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": TWITTER_REDIRECT_URI,
+                "code_verifier": code_verifier
+            }
+        )
+
+    if token_response.status_code != 200:
+        return RedirectResponse(
+            url=f"{FRONTEND_URL}/dashboard/connect-accounts?error=token_exchange_failed"
+        )
+
+    token_data = token_response.json()
+    access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
+    expires_in = token_data.get("expires_in", 7200)  # 2 hours default
+
+    # Get user info from Twitter
+    async with httpx.AsyncClient() as client:
+        user_response = await client.get(
+            "https://api.twitter.com/2/users/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={"user.fields": "id,name,username,profile_image_url"}
+        )
+
+    if user_response.status_code == 200:
+        user_data = user_response.json().get("data", {})
+        twitter_user_id = user_data.get("id", "")
+        username = user_data.get("username", "")
+        display_name = user_data.get("name", "")
+        avatar_url = user_data.get("profile_image_url", "")
+    else:
+        twitter_user_id = ""
+        username = "Unknown"
+        display_name = ""
+        avatar_url = ""
+
+    # Save or update account
+    existing = db.query(UserAccount).filter(
+        UserAccount.user_id == user_id,
+        UserAccount.platform == SocialPlatform.TWITTER,
+        UserAccount.platform_user_id == twitter_user_id
+    ).first()
+
+    if existing:
+        existing.oauth_access_token = access_token
+        existing.oauth_refresh_token = refresh_token
+        existing.oauth_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        existing.oauth_connected_at = datetime.utcnow()
+        existing.is_verified = True
+        existing.username = username
+        existing.display_name = display_name
+        existing.avatar_url = avatar_url
+    else:
+        new_account = UserAccount(
+            user_id=user_id,
+            platform=SocialPlatform.TWITTER,
+            username=username,
+            display_name=display_name,
+            avatar_url=avatar_url,
+            platform_user_id=twitter_user_id,
+            oauth_access_token=access_token,
+            oauth_refresh_token=refresh_token,
+            oauth_token_expires_at=datetime.utcnow() + timedelta(seconds=expires_in),
+            oauth_scope="tweet.read,users.read,offline.access",
+            oauth_connected_at=datetime.utcnow(),
+            is_verified=True,
+            is_active=True
+        )
+        db.add(new_account)
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"{FRONTEND_URL}/dashboard/connect-accounts?success=twitter"
     )
 
 
