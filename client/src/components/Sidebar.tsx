@@ -125,7 +125,7 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold text-sm shadow-lg">
               TS
             </div>
-            <span className="font-semibold text-foreground">Risko.ai</span>
+            <span className="font-semibold text-foreground">Rizko.ai</span>
           </div>
         )}
         <Button

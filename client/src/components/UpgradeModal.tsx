@@ -111,7 +111,7 @@ export function UpgradeModal({ isOpen, onClose, feature: _feature }: UpgradeModa
                   Velocity & saturation
                 </li>
                 <li className="text-xs italic font-semibold text-purple-600">
-                  Exclusive to Risko.ai
+                  Exclusive to Rizko.ai
                 </li>
               </ul>
             </div>

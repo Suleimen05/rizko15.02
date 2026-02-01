@@ -41,7 +41,7 @@ const getApiUrl = (): string => {
 };
 
 const API_URL = getApiUrl();
-const AUTH_STORAGE_KEY = 'risko_auth';
+const AUTH_STORAGE_KEY = 'rizko_auth';
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 

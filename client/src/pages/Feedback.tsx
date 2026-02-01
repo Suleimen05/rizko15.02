@@ -99,7 +99,7 @@ export function Feedback() {
             </div>
             <h2 className="text-2xl font-bold mb-2">Thank You!</h2>
             <p className="text-muted-foreground mb-6">
-              Your feedback helps us make Risko.ai better for everyone.
+              Your feedback helps us make Rizko.ai better for everyone.
               We read every message!
             </p>
             <Button onClick={resetForm}>
@@ -120,7 +120,7 @@ export function Feedback() {
           Feedback
         </h1>
         <p className="text-muted-foreground">
-          Help us improve Risko.ai - your ideas and feedback matter!
+          Help us improve Rizko.ai - your ideas and feedback matter!
         </p>
       </div>
 
@@ -162,7 +162,7 @@ export function Feedback() {
               : selectedType === 'bug'
               ? "I found a bug: when I try to..."
               : selectedType === 'love'
-              ? "I really love how Risko.ai..."
+              ? "I really love how Rizko.ai..."
               : "Your feedback here..."
           }
           value={message}
@@ -176,7 +176,7 @@ export function Feedback() {
 
       {/* Rating */}
       <Card className="p-6">
-        <h3 className="font-semibold mb-4">How would you rate Risko.ai overall?</h3>
+        <h3 className="font-semibold mb-4">How would you rate Rizko.ai overall?</h3>
         <div className="flex items-center gap-2">
           {[1, 2, 3, 4, 5].map((star) => (
             <button
@@ -231,8 +231,8 @@ export function Feedback() {
       {/* Contact Info */}
       <p className="text-center text-sm text-muted-foreground">
         Or email us directly at{' '}
-        <a href="mailto:feedback@risko.ai" className="text-purple-500 hover:underline">
-          feedback@risko.ai
+        <a href="mailto:feedback@rizko.ai" className="text-purple-500 hover:underline">
+          feedback@rizko.ai
         </a>
       </p>
     </div>

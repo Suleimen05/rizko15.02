@@ -1,7 +1,8 @@
-import { HelpCircle, MessageCircle, BookOpen, Video, Mail, ArrowRight } from 'lucide-react';
+import { HelpCircle, MessageCircle, BookOpen, Video, Mail, ArrowRight, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { REVIEW_MODE } from '@/config/features';
+import { Link, useLocation } from 'react-router-dom';
 
 // FAQ items for REVIEW_MODE (Official API only)
 const reviewModeFaqItems = [
@@ -88,7 +89,10 @@ const fullGuides = [
 const guides = REVIEW_MODE ? reviewModeGuides : fullGuides;
 
 export function Help() {
-  return (
+  const location = useLocation();
+  const isStandalone = location.pathname === '/help';
+
+  const content = (
     <div className="space-y-8">
       {/* Header */}
       <div className="text-center">
@@ -97,7 +101,7 @@ export function Help() {
           Help & Support
         </h1>
         <p className="text-muted-foreground mt-2">
-          Get answers to your questions and learn how to use Risko.ai
+          Get answers to your questions and learn how to use Rizko.ai
         </p>
       </div>
 
@@ -135,7 +139,7 @@ export function Help() {
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => window.location.href = 'mailto:axislineX@gmail.com?subject=Risko.ai Support'}
+              onClick={() => window.location.href = 'mailto:support@rizko.ai?subject=Rizko.ai Support'}
             >
               Send Email
               <ArrowRight className="h-4 w-4 ml-2" />
@@ -148,19 +152,20 @@ export function Help() {
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
               <BookOpen className="h-6 w-6 text-white" />
             </div>
-            <h3 className="font-semibold mb-2">Documentation</h3>
+            <h3 className="font-semibold mb-2">FAQ</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Coming soon - we're working on comprehensive guides
+              Find answers to common questions below
             </p>
-            <Button variant="outline" className="w-full" disabled>
-              Coming Soon
+            <Button variant="outline" className="w-full" onClick={() => document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth' })}>
+              View FAQ
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
         </Card>
       </div>
 
       {/* FAQ Section */}
-      <div>
+      <div id="faq">
         <h2 className="text-2xl font-semibold mb-6">Frequently Asked Questions</h2>
         <div className="grid gap-4">
           {faqItems.map((item, index) => (
@@ -224,6 +229,30 @@ export function Help() {
           </div>
         </div>
       </Card>
+
+      {/* Back to Home for standalone */}
+      {isStandalone && (
+        <div className="text-center pt-4">
+          <Link to="/" className="text-blue-500 hover:underline inline-flex items-center gap-2">
+            <Home className="h-4 w-4" />
+            Back to Home
+          </Link>
+        </div>
+      )}
     </div>
   );
+
+  // Standalone mode - with full page wrapper
+  if (isStandalone) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 py-12 px-4">
+        <div className="max-w-4xl mx-auto">
+          {content}
+        </div>
+      </div>
+    );
+  }
+
+  // Dashboard mode - no wrapper
+  return content;
 }
