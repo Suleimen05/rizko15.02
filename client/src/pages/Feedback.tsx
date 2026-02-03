@@ -50,7 +50,7 @@ const feedbackOptions: FeedbackOption[] = [
 ];
 
 export function Feedback() {
-  const { user } = useAuth();
+  useAuth(); // Ensure user is authenticated context is available
   const [selectedType, setSelectedType] = useState<FeedbackType | null>(null);
   const [message, setMessage] = useState('');
   const [rating, setRating] = useState(0);
