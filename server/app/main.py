@@ -34,7 +34,7 @@ from .db import models
 
 # API Routers - Updated with new enterprise routes
 from .api import trends, profiles, competitors, ai_scripts, proxy, favorites
-from .api.routes import auth, oauth
+from .api.routes import auth, oauth, feedback
 
 # Background Scheduler
 from .services.scheduler import start_scheduler
@@ -247,6 +247,13 @@ app.include_router(
     oauth.router,
     prefix="/api/oauth",
     tags=["OAuth"]
+)
+
+# Feedback routes
+app.include_router(
+    feedback.router,
+    prefix="/api",
+    tags=["Feedback"]
 )
 
 

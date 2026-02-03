@@ -1,6 +1,6 @@
 # backend/app/db/models.py
 """
-Database models for Risko.ai
+Database models for Rizko.ai
 Enterprise-grade SQLAlchemy ORM models with proper relationships,
 indexes, and constraints for optimal performance and data integrity.
 
@@ -17,7 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
-from pgvector.sqlalchemy import Vector
+# from pgvector.sqlalchemy import Vector  # Disabled for local dev
 import enum
 
 from ..core.database import Base
@@ -257,7 +257,7 @@ class Trend(Base):
 
     # AI Analysis
     ai_summary = Column(Text, nullable=True)
-    embedding = Column(Vector(512), nullable=True)  # CLIP embedding
+    # embedding = Column(Vector(512), nullable=True)  # CLIP embedding - disabled for local dev
 
     # Search Context
     search_query = Column(String(255), nullable=True)  # Original search query
@@ -678,3 +678,40 @@ class ProfileData(Base):
 
     def __repr__(self):
         return f"<ProfileData(username='{self.username}')>"
+
+
+# =============================================================================
+# FEEDBACK MODEL
+# =============================================================================
+
+class Feedback(Base):
+    """
+    User feedback storage.
+    Stores feedback, bug reports, feature ideas, and ratings.
+    """
+    __tablename__ = "feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    # Feedback content
+    feedback_type = Column(String(20), nullable=False)  # 'idea', 'bug', 'love', 'other'
+    message = Column(Text, nullable=False)
+    rating = Column(Integer, nullable=True)  # 1-5 stars
+
+    # User info (for non-authenticated users)
+    user_email = Column(String(255), nullable=True)
+
+    # Status tracking
+    is_read = Column(Boolean, default=False, nullable=False)
+    admin_notes = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", backref="feedback_items")
+
+    def __repr__(self):
+        return f"<Feedback(id={self.id}, type='{self.feedback_type}', user_id={self.user_id})>"

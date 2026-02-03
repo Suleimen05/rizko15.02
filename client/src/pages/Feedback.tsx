@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiClient } from '@/services/api';
 
 type FeedbackType = 'idea' | 'bug' | 'love' | 'other';
 
@@ -63,23 +64,28 @@ export function Feedback() {
       return;
     }
 
+    if (message.trim().length < 10) {
+      toast.error('Message must be at least 10 characters');
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate API call (in future - send to backend/email)
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      await apiClient.post('/feedback/', {
+        feedback_type: selectedType,
+        message: message.trim(),
+        rating: rating || null,
+      });
 
-    // For now, log to console (later - send to your email/backend)
-    console.log('Feedback submitted:', {
-      type: selectedType,
-      message: message.trim(),
-      rating,
-      user: user?.email || 'anonymous',
-      timestamp: new Date().toISOString(),
-    });
-
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-    toast.success('Thank you for your feedback!');
+      setIsSubmitted(true);
+      toast.success('Thank you for your feedback!');
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.detail || 'Failed to send feedback';
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetForm = () => {
