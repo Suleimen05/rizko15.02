@@ -1,6 +1,9 @@
-# Rizko.ai - TikTok Trend Analysis Platform
-
-> **Fullstack SaaS приложение для анализа трендов социальных сетей с AI-генерацией скриптов, машинным обучением и отслеживанием конкурентов.**
+<div align="center">
+  <img src="client/public/logo192.png" alt="Rizko.ai Logo" width="120" height="120" />
+  <h1>Rizko.ai</h1>
+  <p><strong>TikTok Trend Analysis Platform</strong></p>
+  <p>Fullstack SaaS приложение для анализа трендов социальных сетей с AI-генерацией скриптов, машинным обучением и отслеживанием конкурентов.</p>
+</div>
 
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![React](https://img.shields.io/badge/React-19-61DAFB)
