@@ -83,6 +83,15 @@ export function usePWA() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
+    // iOS Detection - Safari doesn't support beforeinstallprompt
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isStandalone = (window.navigator as any).standalone === true;
+
+    // Show install prompt for iOS if not already installed
+    if (isIOS && !isStandalone) {
+      setState((prev) => ({ ...prev, isInstallable: true }));
+    }
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };

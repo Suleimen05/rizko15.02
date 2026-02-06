@@ -122,6 +122,9 @@ function PWAInstallBanner() {
 
   // Show install banner
   if (isInstallable && !isInstalled) {
+    // Detect iOS for special instructions
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
     return (
       <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 z-[100] bg-card border rounded-xl shadow-2xl p-4">
         <div className="flex items-start gap-3">
@@ -131,20 +134,25 @@ function PWAInstallBanner() {
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-sm">Установить Rizko.ai</h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Добавьте на главный экран для быстрого доступа
+              {isIOS
+                ? 'Нажмите "Поделиться" → "На экран Домой"'
+                : 'Добавьте на главный экран для быстрого доступа'
+              }
             </p>
           </div>
         </div>
-        <div className="flex gap-2 mt-3">
-          <Button
-            size="sm"
-            className="flex-1"
-            onClick={handleInstall}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Установить
-          </Button>
-        </div>
+        {!isIOS && (
+          <div className="flex gap-2 mt-3">
+            <Button
+              size="sm"
+              className="flex-1"
+              onClick={handleInstall}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Установить
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
