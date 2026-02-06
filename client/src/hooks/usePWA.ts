@@ -77,6 +77,7 @@ export function usePWA() {
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
+      console.log('[PWA] beforeinstallprompt event fired (Android/Desktop)');
       setDeferredPrompt(e);
       setState((prev) => ({ ...prev, isInstallable: true }));
     };
@@ -86,10 +87,22 @@ export function usePWA() {
     // iOS Detection - Safari doesn't support beforeinstallprompt
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isStandalone = (window.navigator as any).standalone === true;
+    const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;
+
+    console.log('[PWA] Device Detection:', {
+      userAgent: navigator.userAgent,
+      isIOS,
+      isStandalone,
+      isInStandaloneMode,
+      shouldShowIOSBanner: isIOS && !isStandalone && !isInStandaloneMode
+    });
 
     // Show install prompt for iOS if not already installed
-    if (isIOS && !isStandalone) {
+    if (isIOS && !isStandalone && !isInStandaloneMode) {
+      console.log('[PWA] ✅ Showing iOS install banner');
       setState((prev) => ({ ...prev, isInstallable: true }));
+    } else if (isIOS) {
+      console.log('[PWA] ❌ iOS banner hidden - already installed or in standalone mode');
     }
 
     return () => {

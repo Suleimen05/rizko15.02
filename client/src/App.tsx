@@ -76,6 +76,11 @@ function PWAInstallBanner() {
   const network = useNetworkStatus();
   const haptic = useHaptic();
 
+  // Debug log
+  useEffect(() => {
+    console.log('[PWA Banner] State:', { isInstallable, isInstalled, updateAvailable });
+  }, [isInstallable, isInstalled, updateAvailable]);
+
   // Show offline toast
   useEffect(() => {
     if (isOffline) {
