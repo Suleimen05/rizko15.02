@@ -125,27 +125,10 @@ function PWAInstallBanner() {
     );
   }
 
-  // DEBUG: Always show debug info on mobile for testing
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-  // Show debug panel on mobile
-  if (isMobile) {
-    return (
-      <div className="fixed top-0 left-0 right-0 z-[100] bg-yellow-500 text-black p-2 text-xs overflow-auto max-h-48">
-        <div className="font-bold mb-1">🔍 PWA Debug Info:</div>
-        <div>isInstallable: {String(isInstallable)}</div>
-        <div>isInstalled: {String(isInstalled)}</div>
-        <div>isIOS: {String(isIOS)}</div>
-        <div>updateAvailable: {String(updateAvailable)}</div>
-        <div>UA: {navigator.userAgent.slice(0, 50)}...</div>
-      </div>
-    );
-  }
-
   // Show install banner
   if (isInstallable && !isInstalled) {
     // Detect iOS for special instructions
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
     return (
       <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 z-[100] bg-card border rounded-xl shadow-2xl p-4">
