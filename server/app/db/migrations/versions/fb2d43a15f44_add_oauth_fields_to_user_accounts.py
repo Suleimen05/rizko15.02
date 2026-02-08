@@ -33,6 +33,7 @@ def upgrade() -> None:
     # Fill NULL values with defaults before setting NOT NULL
     op.execute("UPDATE trends SET stats = '{}'::jsonb WHERE stats IS NULL")
     op.execute("UPDATE trends SET initial_stats = '{}'::jsonb WHERE initial_stats IS NULL")
+    op.execute("UPDATE trends SET search_mode = 'KEYWORDS' WHERE search_mode IS NULL")
     op.execute("UPDATE trends SET created_at = NOW() WHERE created_at IS NULL")
     op.execute("UPDATE competitors SET username = 'unknown' WHERE username IS NULL")
     op.execute("UPDATE competitors SET recent_videos = '[]'::jsonb WHERE recent_videos IS NULL")
@@ -62,6 +63,7 @@ def upgrade() -> None:
     op.execute("UPDATE user_settings SET region = 'US' WHERE region IS NULL")
     op.execute("UPDATE user_settings SET timezone = 'UTC' WHERE timezone IS NULL")
     op.execute("UPDATE user_settings SET auto_generate_scripts = true WHERE auto_generate_scripts IS NULL")
+    op.execute("UPDATE user_settings SET default_search_mode = 'KEYWORDS' WHERE default_search_mode IS NULL")
     op.execute("UPDATE user_settings SET notifications_email = true WHERE notifications_email IS NULL")
     op.execute("UPDATE user_settings SET notifications_trends = true WHERE notifications_trends IS NULL")
     op.execute("UPDATE user_settings SET notifications_competitors = true WHERE notifications_competitors IS NULL")
@@ -73,20 +75,26 @@ def upgrade() -> None:
     op.execute("UPDATE users SET is_verified = false WHERE is_verified IS NULL")
     op.execute("UPDATE users SET is_admin = false WHERE is_admin IS NULL")
     op.execute("UPDATE users SET credits = 100 WHERE credits IS NULL")
+    op.execute("UPDATE users SET subscription_tier = 'FREE' WHERE subscription_tier IS NULL")
     op.execute("UPDATE users SET created_at = NOW() WHERE created_at IS NULL")
     op.execute("UPDATE users SET updated_at = NOW() WHERE updated_at IS NULL")
 
+    # Normalize ENUM values to uppercase before casting
+    op.execute("UPDATE trends SET search_mode = UPPER(search_mode) WHERE search_mode IS NOT NULL")
+    op.execute("UPDATE user_settings SET default_search_mode = UPPER(default_search_mode) WHERE default_search_mode IS NOT NULL")
+    op.execute("UPDATE users SET subscription_tier = UPPER(subscription_tier) WHERE subscription_tier IS NOT NULL")
+
     # ==========================================================================
-    # STEP 1: chat_messages - add new columns
+    # STEP 1: chat_messages - add new columns (IF NOT EXISTS for safety)
     # ==========================================================================
-    op.add_column('chat_messages', sa.Column('session_id', sa.String(length=100), nullable=False, server_default='legacy'))
-    op.add_column('chat_messages', sa.Column('tokens_used', sa.Integer(), nullable=True))
+    op.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS session_id VARCHAR(100) NOT NULL DEFAULT 'legacy'")
+    op.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS tokens_used INTEGER")
     op.alter_column('chat_messages', 'created_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=False)
-    op.create_index(op.f('ix_chat_messages_session_id'), 'chat_messages', ['session_id'], unique=False)
-    op.create_index('ix_chat_session_created', 'chat_messages', ['session_id', 'created_at'], unique=False)
-    op.create_index('ix_chat_user_session', 'chat_messages', ['user_id', 'session_id'], unique=False)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_chat_messages_session_id ON chat_messages (session_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_chat_session_created ON chat_messages (session_id, created_at)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_chat_user_session ON chat_messages (user_id, session_id)")
 
     # ==========================================================================
     # STEP 2: competitors - set NOT NULL + indexes
@@ -119,12 +127,23 @@ def upgrade() -> None:
     op.alter_column('competitors', 'updated_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=False)
-    op.drop_index(op.f('ix_competitors_username'), table_name='competitors')
-    op.create_index(op.f('ix_competitors_username'), 'competitors', ['username'], unique=False)
-    op.create_index('ix_competitors_user_active', 'competitors', ['user_id', 'is_active'], unique=False)
-    op.create_index(op.f('ix_competitors_user_id'), 'competitors', ['user_id'], unique=False)
-    op.create_unique_constraint('uix_competitor_user_username', 'competitors', ['user_id', 'username'])
-    op.create_foreign_key(None, 'competitors', 'users', ['user_id'], ['id'], ondelete='CASCADE')
+    op.execute("DROP INDEX IF EXISTS ix_competitors_username")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_competitors_username ON competitors (username)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_competitors_user_active ON competitors (user_id, is_active)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_competitors_user_id ON competitors (user_id)")
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE competitors ADD CONSTRAINT uix_competitor_user_username UNIQUE (user_id, username);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE competitors ADD CONSTRAINT fk_competitors_user_id
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """)
 
     # ==========================================================================
     # STEP 3: profile_data
@@ -154,21 +173,33 @@ def upgrade() -> None:
     op.alter_column('trends', 'initial_stats',
                existing_type=postgresql.JSONB(astext_type=sa.Text()),
                nullable=False)
-    # Create enum type first, then cast with USING
+    # Create enum type first, then cast with USING (handle DEFAULT safely)
     op.execute("DO $$ BEGIN CREATE TYPE searchmode AS ENUM ('KEYWORDS', 'USERNAME'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    op.execute("ALTER TABLE trends ALTER COLUMN search_mode DROP DEFAULT")
     op.execute("ALTER TABLE trends ALTER COLUMN search_mode TYPE searchmode USING search_mode::searchmode")
     op.alter_column('trends', 'created_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=False)
-    op.drop_index(op.f('ix_trends_url'), table_name='trends')
-    op.create_index(op.f('ix_trends_url'), 'trends', ['url'], unique=False)
-    op.create_index('ix_trends_user_created', 'trends', ['user_id', 'created_at'], unique=False)
-    op.create_index(op.f('ix_trends_user_id'), 'trends', ['user_id'], unique=False)
-    op.create_index('ix_trends_user_score', 'trends', ['user_id', 'uts_score'], unique=False)
-    op.create_index('ix_trends_user_vertical', 'trends', ['user_id', 'vertical'], unique=False)
-    op.create_index(op.f('ix_trends_uts_score'), 'trends', ['uts_score'], unique=False)
-    op.create_unique_constraint('uix_trend_user_platform', 'trends', ['user_id', 'platform_id'])
-    op.create_foreign_key(None, 'trends', 'users', ['user_id'], ['id'], ondelete='CASCADE')
+    op.execute("DROP INDEX IF EXISTS ix_trends_url")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_trends_url ON trends (url)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_trends_user_created ON trends (user_id, created_at)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_trends_user_id ON trends (user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_trends_user_score ON trends (user_id, uts_score)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_trends_user_vertical ON trends (user_id, vertical)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_trends_uts_score ON trends (uts_score)")
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE trends ADD CONSTRAINT uix_trend_user_platform UNIQUE (user_id, platform_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE trends ADD CONSTRAINT fk_trends_user_id
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """)
 
     # ==========================================================================
     # STEP 5: user_favorites
@@ -180,21 +211,26 @@ def upgrade() -> None:
     op.alter_column('user_favorites', 'created_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=False)
-    op.create_unique_constraint('uix_favorite_user_trend', 'user_favorites', ['user_id', 'trend_id'])
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE user_favorites ADD CONSTRAINT uix_favorite_user_trend UNIQUE (user_id, trend_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+        END $$;
+    """)
 
     # ==========================================================================
-    # STEP 6: user_scripts - add new columns with server_default
+    # STEP 6: user_scripts - add new columns with IF NOT EXISTS
     # ==========================================================================
-    op.add_column('user_scripts', sa.Column('hook', sa.Text(), nullable=False, server_default=''))
-    op.add_column('user_scripts', sa.Column('body', postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default='[]'))
-    op.add_column('user_scripts', sa.Column('call_to_action', sa.Text(), nullable=True))
-    op.add_column('user_scripts', sa.Column('source_trend_id', sa.Integer(), nullable=True))
-    op.add_column('user_scripts', sa.Column('niche', sa.String(length=100), nullable=True))
-    op.add_column('user_scripts', sa.Column('duration_seconds', sa.Integer(), nullable=False, server_default='30'))
-    op.add_column('user_scripts', sa.Column('model_used', sa.String(length=50), nullable=False, server_default='gemini'))
-    op.add_column('user_scripts', sa.Column('viral_elements', postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default='[]'))
-    op.add_column('user_scripts', sa.Column('tips', postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default='[]'))
-    op.add_column('user_scripts', sa.Column('is_favorite', sa.Boolean(), nullable=False, server_default='false'))
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS hook TEXT NOT NULL DEFAULT ''")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS body JSONB NOT NULL DEFAULT '[]'")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS call_to_action TEXT")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS source_trend_id INTEGER")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS niche VARCHAR(100)")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS duration_seconds INTEGER NOT NULL DEFAULT 30")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS model_used VARCHAR(50) NOT NULL DEFAULT 'gemini'")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS viral_elements JSONB NOT NULL DEFAULT '[]'")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS tips JSONB NOT NULL DEFAULT '[]'")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT false")
     op.alter_column('user_scripts', 'tone',
                existing_type=sa.VARCHAR(),
                nullable=False)
@@ -210,19 +246,26 @@ def upgrade() -> None:
     op.alter_column('user_scripts', 'updated_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=False)
-    op.create_index('ix_scripts_user_created', 'user_scripts', ['user_id', 'created_at'], unique=False)
-    op.create_index('ix_scripts_user_favorite', 'user_scripts', ['user_id', 'is_favorite'], unique=False)
-    op.drop_constraint(op.f('user_scripts_trend_id_fkey'), 'user_scripts', type_='foreignkey')
-    op.create_foreign_key(None, 'user_scripts', 'trends', ['source_trend_id'], ['id'], ondelete='SET NULL')
-    op.drop_column('user_scripts', 'content')
-    op.drop_column('user_scripts', 'trend_id')
+    op.execute("CREATE INDEX IF NOT EXISTS ix_scripts_user_created ON user_scripts (user_id, created_at)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_scripts_user_favorite ON user_scripts (user_id, is_favorite)")
+    # Drop old FK and column safely
+    op.execute("ALTER TABLE user_scripts DROP CONSTRAINT IF EXISTS user_scripts_trend_id_fkey")
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE user_scripts ADD CONSTRAINT fk_user_scripts_source_trend
+                FOREIGN KEY (source_trend_id) REFERENCES trends(id) ON DELETE SET NULL;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """)
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS content")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS trend_id")
 
     # ==========================================================================
-    # STEP 7: user_searches - add new columns with server_default
+    # STEP 7: user_searches - add new columns with IF NOT EXISTS
     # ==========================================================================
     op.execute("ALTER TABLE user_searches ADD COLUMN IF NOT EXISTS mode searchmode NOT NULL DEFAULT 'KEYWORDS'")
-    op.add_column('user_searches', sa.Column('is_deep', sa.Boolean(), nullable=False, server_default='false'))
-    op.add_column('user_searches', sa.Column('execution_time_ms', sa.Integer(), nullable=True))
+    op.execute("ALTER TABLE user_searches ADD COLUMN IF NOT EXISTS is_deep BOOLEAN NOT NULL DEFAULT false")
+    op.execute("ALTER TABLE user_searches ADD COLUMN IF NOT EXISTS execution_time_ms INTEGER")
     op.alter_column('user_searches', 'filters',
                existing_type=postgresql.JSONB(astext_type=sa.Text()),
                nullable=False)
@@ -232,8 +275,8 @@ def upgrade() -> None:
     op.alter_column('user_searches', 'created_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=False)
-    op.create_index('ix_searches_user_created', 'user_searches', ['user_id', 'created_at'], unique=False)
-    op.create_index(op.f('ix_user_searches_query'), 'user_searches', ['query'], unique=False)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_searches_user_created ON user_searches (user_id, created_at)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_user_searches_query ON user_searches (query)")
 
     # ==========================================================================
     # STEP 8: user_settings
@@ -254,7 +297,10 @@ def upgrade() -> None:
     op.alter_column('user_settings', 'auto_generate_scripts',
                existing_type=sa.BOOLEAN(),
                nullable=False)
+    # default_search_mode: DROP DEFAULT → TYPE change → SET DEFAULT
+    op.execute("ALTER TABLE user_settings ALTER COLUMN default_search_mode DROP DEFAULT")
     op.execute("ALTER TABLE user_settings ALTER COLUMN default_search_mode TYPE searchmode USING default_search_mode::searchmode")
+    op.execute("ALTER TABLE user_settings ALTER COLUMN default_search_mode SET DEFAULT 'KEYWORDS'")
     op.alter_column('user_settings', 'default_search_mode',
                nullable=False)
     op.alter_column('user_settings', 'notifications_email',
@@ -279,8 +325,8 @@ def upgrade() -> None:
     op.alter_column('user_settings', 'updated_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=False)
-    op.drop_constraint(op.f('user_settings_user_id_key'), 'user_settings', type_='unique')
-    op.create_index(op.f('ix_user_settings_user_id'), 'user_settings', ['user_id'], unique=True)
+    op.execute("ALTER TABLE user_settings DROP CONSTRAINT IF EXISTS user_settings_user_id_key")
+    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_user_settings_user_id ON user_settings (user_id)")
 
     # ==========================================================================
     # STEP 9: users
@@ -288,8 +334,11 @@ def upgrade() -> None:
     op.alter_column('users', 'hashed_password',
                existing_type=sa.VARCHAR(),
                nullable=True)
+    # subscription_tier: DROP DEFAULT → CREATE ENUM → TYPE change → SET DEFAULT
     op.execute("DO $$ BEGIN CREATE TYPE subscriptiontier AS ENUM ('FREE', 'CREATOR', 'PRO', 'AGENCY'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    op.execute("ALTER TABLE users ALTER COLUMN subscription_tier DROP DEFAULT")
     op.execute("ALTER TABLE users ALTER COLUMN subscription_tier TYPE subscriptiontier USING subscription_tier::subscriptiontier")
+    op.execute("ALTER TABLE users ALTER COLUMN subscription_tier SET DEFAULT 'FREE'")
     op.alter_column('users', 'subscription_tier',
                nullable=False)
     op.alter_column('users', 'credits',
@@ -312,13 +361,11 @@ def upgrade() -> None:
     op.alter_column('users', 'updated_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=False)
-    op.create_index('ix_users_oauth', 'users', ['oauth_provider', 'oauth_id'], unique=False)
-    # ### end Alembic commands ###
+    op.execute("CREATE INDEX IF NOT EXISTS ix_users_oauth ON users (oauth_provider, oauth_id)")
 
 
 def downgrade() -> None:
-    # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_index('ix_users_oauth', table_name='users')
+    op.execute("DROP INDEX IF EXISTS ix_users_oauth")
     op.alter_column('users', 'updated_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=True)
@@ -339,16 +386,21 @@ def downgrade() -> None:
                existing_type=sa.INTEGER(),
                nullable=True,
                existing_server_default=sa.text('100'))
-    op.alter_column('users', 'subscription_tier',
-               existing_type=sa.Enum('FREE', 'CREATOR', 'PRO', 'AGENCY', name='subscriptiontier'),
-               type_=sa.VARCHAR(length=20),
-               nullable=True,
-               existing_server_default=sa.text("'FREE'::character varying"))
+    # subscription_tier: ENUM → VARCHAR
+    op.execute("ALTER TABLE users ALTER COLUMN subscription_tier DROP DEFAULT")
+    op.execute("ALTER TABLE users ALTER COLUMN subscription_tier TYPE VARCHAR(20) USING subscription_tier::text")
+    op.execute("ALTER TABLE users ALTER COLUMN subscription_tier SET DEFAULT 'FREE'")
+    op.alter_column('users', 'subscription_tier', nullable=True)
     op.alter_column('users', 'hashed_password',
                existing_type=sa.VARCHAR(),
                nullable=False)
-    op.drop_index(op.f('ix_user_settings_user_id'), table_name='user_settings')
-    op.create_unique_constraint(op.f('user_settings_user_id_key'), 'user_settings', ['user_id'], postgresql_nulls_not_distinct=False)
+    op.execute("DROP INDEX IF EXISTS ix_user_settings_user_id")
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE user_settings ADD CONSTRAINT user_settings_user_id_key UNIQUE (user_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+        END $$;
+    """)
     op.alter_column('user_settings', 'updated_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=True)
@@ -371,11 +423,11 @@ def downgrade() -> None:
                existing_type=sa.BOOLEAN(),
                nullable=True,
                existing_server_default=sa.text('true'))
-    op.alter_column('user_settings', 'default_search_mode',
-               existing_type=sa.Enum('KEYWORDS', 'USERNAME', name='searchmode'),
-               type_=sa.VARCHAR(length=20),
-               nullable=True,
-               existing_server_default=sa.text("'KEYWORDS'::character varying"))
+    # default_search_mode: ENUM → VARCHAR
+    op.execute("ALTER TABLE user_settings ALTER COLUMN default_search_mode DROP DEFAULT")
+    op.execute("ALTER TABLE user_settings ALTER COLUMN default_search_mode TYPE VARCHAR(20) USING default_search_mode::text")
+    op.execute("ALTER TABLE user_settings ALTER COLUMN default_search_mode SET DEFAULT 'KEYWORDS'")
+    op.alter_column('user_settings', 'default_search_mode', nullable=True)
     op.alter_column('user_settings', 'auto_generate_scripts',
                existing_type=sa.BOOLEAN(),
                nullable=True)
@@ -392,8 +444,8 @@ def downgrade() -> None:
     op.alter_column('user_settings', 'dark_mode',
                existing_type=sa.BOOLEAN(),
                nullable=True)
-    op.drop_index(op.f('ix_user_searches_query'), table_name='user_searches')
-    op.drop_index('ix_searches_user_created', table_name='user_searches')
+    op.execute("DROP INDEX IF EXISTS ix_user_searches_query")
+    op.execute("DROP INDEX IF EXISTS ix_searches_user_created")
     op.alter_column('user_searches', 'created_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=True)
@@ -403,15 +455,21 @@ def downgrade() -> None:
     op.alter_column('user_searches', 'filters',
                existing_type=postgresql.JSONB(astext_type=sa.Text()),
                nullable=True)
-    op.drop_column('user_searches', 'execution_time_ms')
-    op.drop_column('user_searches', 'is_deep')
-    op.drop_column('user_searches', 'mode')
-    op.add_column('user_scripts', sa.Column('trend_id', sa.INTEGER(), autoincrement=False, nullable=True))
-    op.add_column('user_scripts', sa.Column('content', sa.TEXT(), autoincrement=False, nullable=False))
-    op.drop_constraint(None, 'user_scripts', type_='foreignkey')
-    op.create_foreign_key(op.f('user_scripts_trend_id_fkey'), 'user_scripts', 'trends', ['trend_id'], ['id'], ondelete='SET NULL')
-    op.drop_index('ix_scripts_user_favorite', table_name='user_scripts')
-    op.drop_index('ix_scripts_user_created', table_name='user_scripts')
+    op.execute("ALTER TABLE user_searches DROP COLUMN IF EXISTS execution_time_ms")
+    op.execute("ALTER TABLE user_searches DROP COLUMN IF EXISTS is_deep")
+    op.execute("ALTER TABLE user_searches DROP COLUMN IF EXISTS mode")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS trend_id INTEGER")
+    op.execute("ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS content TEXT NOT NULL DEFAULT ''")
+    op.execute("ALTER TABLE user_scripts DROP CONSTRAINT IF EXISTS fk_user_scripts_source_trend")
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE user_scripts ADD CONSTRAINT user_scripts_trend_id_fkey
+                FOREIGN KEY (trend_id) REFERENCES trends(id) ON DELETE SET NULL;
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """)
+    op.execute("DROP INDEX IF EXISTS ix_scripts_user_favorite")
+    op.execute("DROP INDEX IF EXISTS ix_scripts_user_created")
     op.alter_column('user_scripts', 'updated_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=True)
@@ -427,17 +485,17 @@ def downgrade() -> None:
     op.alter_column('user_scripts', 'tone',
                existing_type=sa.VARCHAR(),
                nullable=True)
-    op.drop_column('user_scripts', 'is_favorite')
-    op.drop_column('user_scripts', 'tips')
-    op.drop_column('user_scripts', 'viral_elements')
-    op.drop_column('user_scripts', 'model_used')
-    op.drop_column('user_scripts', 'duration_seconds')
-    op.drop_column('user_scripts', 'niche')
-    op.drop_column('user_scripts', 'source_trend_id')
-    op.drop_column('user_scripts', 'call_to_action')
-    op.drop_column('user_scripts', 'body')
-    op.drop_column('user_scripts', 'hook')
-    op.drop_constraint('uix_favorite_user_trend', 'user_favorites', type_='unique')
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS is_favorite")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS tips")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS viral_elements")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS model_used")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS duration_seconds")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS niche")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS source_trend_id")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS call_to_action")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS body")
+    op.execute("ALTER TABLE user_scripts DROP COLUMN IF EXISTS hook")
+    op.execute("ALTER TABLE user_favorites DROP CONSTRAINT IF EXISTS uix_favorite_user_trend")
     op.alter_column('user_favorites', 'created_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=True)
@@ -445,22 +503,21 @@ def downgrade() -> None:
                existing_type=postgresql.JSONB(astext_type=sa.Text()),
                nullable=True,
                existing_server_default=sa.text("'[]'::jsonb"))
-    op.drop_constraint(None, 'trends', type_='foreignkey')
-    op.drop_constraint('uix_trend_user_platform', 'trends', type_='unique')
-    op.drop_index(op.f('ix_trends_uts_score'), table_name='trends')
-    op.drop_index('ix_trends_user_vertical', table_name='trends')
-    op.drop_index('ix_trends_user_score', table_name='trends')
-    op.drop_index(op.f('ix_trends_user_id'), table_name='trends')
-    op.drop_index('ix_trends_user_created', table_name='trends')
-    op.drop_index(op.f('ix_trends_url'), table_name='trends')
-    op.create_index(op.f('ix_trends_url'), 'trends', ['url'], unique=True)
+    op.execute("ALTER TABLE trends DROP CONSTRAINT IF EXISTS fk_trends_user_id")
+    op.execute("ALTER TABLE trends DROP CONSTRAINT IF EXISTS uix_trend_user_platform")
+    op.execute("DROP INDEX IF EXISTS ix_trends_uts_score")
+    op.execute("DROP INDEX IF EXISTS ix_trends_user_vertical")
+    op.execute("DROP INDEX IF EXISTS ix_trends_user_score")
+    op.execute("DROP INDEX IF EXISTS ix_trends_user_id")
+    op.execute("DROP INDEX IF EXISTS ix_trends_user_created")
+    op.execute("DROP INDEX IF EXISTS ix_trends_url")
+    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_trends_url ON trends (url)")
     op.alter_column('trends', 'created_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=True)
-    op.alter_column('trends', 'search_mode',
-               existing_type=sa.Enum('KEYWORDS', 'USERNAME', name='searchmode'),
-               type_=sa.VARCHAR(length=20),
-               existing_nullable=True)
+    # search_mode: ENUM → VARCHAR
+    op.execute("ALTER TABLE trends ALTER COLUMN search_mode DROP DEFAULT")
+    op.execute("ALTER TABLE trends ALTER COLUMN search_mode TYPE VARCHAR(20) USING search_mode::text")
     op.alter_column('trends', 'initial_stats',
                existing_type=postgresql.JSONB(astext_type=sa.Text()),
                nullable=True)
@@ -482,12 +539,12 @@ def downgrade() -> None:
     op.alter_column('profile_data', 'username',
                existing_type=sa.VARCHAR(),
                nullable=True)
-    op.drop_constraint(None, 'competitors', type_='foreignkey')
-    op.drop_constraint('uix_competitor_user_username', 'competitors', type_='unique')
-    op.drop_index(op.f('ix_competitors_user_id'), table_name='competitors')
-    op.drop_index('ix_competitors_user_active', table_name='competitors')
-    op.drop_index(op.f('ix_competitors_username'), table_name='competitors')
-    op.create_index(op.f('ix_competitors_username'), 'competitors', ['username'], unique=True)
+    op.execute("ALTER TABLE competitors DROP CONSTRAINT IF EXISTS fk_competitors_user_id")
+    op.execute("ALTER TABLE competitors DROP CONSTRAINT IF EXISTS uix_competitor_user_username")
+    op.execute("DROP INDEX IF EXISTS ix_competitors_user_id")
+    op.execute("DROP INDEX IF EXISTS ix_competitors_user_active")
+    op.execute("DROP INDEX IF EXISTS ix_competitors_username")
+    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_competitors_username ON competitors (username)")
     op.alter_column('competitors', 'updated_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=True)
@@ -516,12 +573,14 @@ def downgrade() -> None:
     op.alter_column('competitors', 'user_id',
                existing_type=sa.INTEGER(),
                nullable=True)
-    op.drop_index('ix_chat_user_session', table_name='chat_messages')
-    op.drop_index('ix_chat_session_created', table_name='chat_messages')
-    op.drop_index(op.f('ix_chat_messages_session_id'), table_name='chat_messages')
+    op.execute("DROP INDEX IF EXISTS ix_chat_user_session")
+    op.execute("DROP INDEX IF EXISTS ix_chat_session_created")
+    op.execute("DROP INDEX IF EXISTS ix_chat_messages_session_id")
     op.alter_column('chat_messages', 'created_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=True)
-    op.drop_column('chat_messages', 'tokens_used')
-    op.drop_column('chat_messages', 'session_id')
-    # ### end Alembic commands ###
+    op.execute("ALTER TABLE chat_messages DROP COLUMN IF EXISTS tokens_used")
+    op.execute("ALTER TABLE chat_messages DROP COLUMN IF EXISTS session_id")
+    # Drop enum types
+    op.execute("DROP TYPE IF EXISTS searchmode")
+    op.execute("DROP TYPE IF EXISTS subscriptiontier")
