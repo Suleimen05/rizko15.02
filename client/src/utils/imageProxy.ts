@@ -4,8 +4,6 @@
  * Wraps TikTok/Instagram CDN URLs in our backend proxy to bypass CORS restrictions.
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
 /**
  * Wrap an image URL with a public image proxy to bypass CORS/referrer restrictions
  *
