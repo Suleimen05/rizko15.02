@@ -154,10 +154,9 @@ def upgrade() -> None:
     op.alter_column('trends', 'initial_stats',
                existing_type=postgresql.JSONB(astext_type=sa.Text()),
                nullable=False)
-    op.alter_column('trends', 'search_mode',
-               existing_type=sa.VARCHAR(length=20),
-               type_=sa.Enum('KEYWORDS', 'USERNAME', name='searchmode'),
-               existing_nullable=True)
+    # Create enum type first, then cast with USING
+    op.execute("DO $$ BEGIN CREATE TYPE searchmode AS ENUM ('KEYWORDS', 'USERNAME'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    op.execute("ALTER TABLE trends ALTER COLUMN search_mode TYPE searchmode USING search_mode::searchmode")
     op.alter_column('trends', 'created_at',
                existing_type=postgresql.TIMESTAMP(),
                nullable=False)
@@ -221,7 +220,7 @@ def upgrade() -> None:
     # ==========================================================================
     # STEP 7: user_searches - add new columns with server_default
     # ==========================================================================
-    op.add_column('user_searches', sa.Column('mode', sa.Enum('KEYWORDS', 'USERNAME', name='searchmode'), nullable=False, server_default='KEYWORDS'))
+    op.execute("ALTER TABLE user_searches ADD COLUMN IF NOT EXISTS mode searchmode NOT NULL DEFAULT 'KEYWORDS'")
     op.add_column('user_searches', sa.Column('is_deep', sa.Boolean(), nullable=False, server_default='false'))
     op.add_column('user_searches', sa.Column('execution_time_ms', sa.Integer(), nullable=True))
     op.alter_column('user_searches', 'filters',
@@ -255,11 +254,9 @@ def upgrade() -> None:
     op.alter_column('user_settings', 'auto_generate_scripts',
                existing_type=sa.BOOLEAN(),
                nullable=False)
+    op.execute("ALTER TABLE user_settings ALTER COLUMN default_search_mode TYPE searchmode USING default_search_mode::searchmode")
     op.alter_column('user_settings', 'default_search_mode',
-               existing_type=sa.VARCHAR(length=20),
-               type_=sa.Enum('KEYWORDS', 'USERNAME', name='searchmode'),
-               nullable=False,
-               existing_server_default=sa.text("'KEYWORDS'::character varying"))
+               nullable=False)
     op.alter_column('user_settings', 'notifications_email',
                existing_type=sa.BOOLEAN(),
                nullable=False,
@@ -291,11 +288,10 @@ def upgrade() -> None:
     op.alter_column('users', 'hashed_password',
                existing_type=sa.VARCHAR(),
                nullable=True)
+    op.execute("DO $$ BEGIN CREATE TYPE subscriptiontier AS ENUM ('FREE', 'CREATOR', 'PRO', 'AGENCY'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    op.execute("ALTER TABLE users ALTER COLUMN subscription_tier TYPE subscriptiontier USING subscription_tier::subscriptiontier")
     op.alter_column('users', 'subscription_tier',
-               existing_type=sa.VARCHAR(length=20),
-               type_=sa.Enum('FREE', 'CREATOR', 'PRO', 'AGENCY', name='subscriptiontier'),
-               nullable=False,
-               existing_server_default=sa.text("'FREE'::character varying"))
+               nullable=False)
     op.alter_column('users', 'credits',
                existing_type=sa.INTEGER(),
                nullable=False,
