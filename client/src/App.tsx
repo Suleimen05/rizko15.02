@@ -6,13 +6,14 @@ import { motion } from 'framer-motion';
 import { Download, RefreshCw, WifiOff, Wifi } from 'lucide-react';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { ChatProvider } from '@/contexts/ChatContext';
+import { WorkflowProvider } from '@/contexts/WorkflowContext';
 import { LandingPage } from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
 import { MobileSidebar } from '@/components/MobileSidebar';
-import { UnifiedSidebar } from '@/components/UnifiedSidebar';
 import { Dashboard } from '@/pages/Dashboard';
 import { Trending } from '@/pages/Trending';
 import { Discover } from '@/pages/Discover';
@@ -21,6 +22,7 @@ import { AIScripts } from '@/pages/AIScripts';
 import { AIWorkspace } from '@/pages/AIWorkspace';
 import { WorkflowBuilder } from '@/pages/WorkflowBuilder';
 import { Competitors } from '@/pages/Competitors';
+import { CompetitorFeed } from '@/pages/CompetitorFeed';
 import { AccountSearch } from '@/pages/AccountSearch';
 import { SettingsPage } from '@/pages/Settings';
 import { Help } from '@/pages/Help';
@@ -34,9 +36,7 @@ import { Marketplace } from '@/pages/Marketplace';
 import { Feedback } from '@/pages/Feedback';
 import { Saved } from '@/pages/Saved';
 import { MyVideosPage } from '@/pages/MyVideos';
-import { ConnectAccountsPage } from '@/pages/ConnectAccounts';
 import { OAuthCallback } from '@/pages/OAuthCallback';
-import { useAppState } from '@/hooks/useAppState';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { DevAccessGate } from '@/components/DevAccessGate';
@@ -167,19 +167,9 @@ function PWAInstallBanner() {
 
 // Dashboard Layout
 function DashboardLayout() {
-  const {
-    sidebarOpen,
-    toggleSidebar,
-  } = useAppState();
-
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const haptic = useHaptic();
-
-  // Toggle between old sidebar and new unified sidebar
-  // Change to 'A' or 'B' to test variants, or 'old' for original
-  const sidebarVariant = 'A' as const;
-  const useOldSidebar = false;
 
   // Full-width pages without padding (like workflow builder)
   const isFullWidthPage = location.pathname.includes('/ai-scripts') || location.pathname.includes('/ai-workspace');
@@ -196,11 +186,7 @@ function DashboardLayout() {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Desktop Sidebar */}
-      {useOldSidebar ? (
-        <Sidebar open={sidebarOpen} onToggle={toggleSidebar} />
-      ) : (
-        <UnifiedSidebar variant={sidebarVariant} />
-      )}
+      <Sidebar />
 
       {/* Mobile Sidebar */}
       <MobileSidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
@@ -224,7 +210,7 @@ function DashboardLayout() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/my-videos" element={<MyVideosPage />} />
-                <Route path="/connect-accounts" element={<ConnectAccountsPage />} />
+                <Route path="/connect-accounts" element={<Navigate to="/dashboard/settings?tab=accounts" replace />} />
                 <Route path="/trending" element={<Trending />} />
                 <Route path="/discover" element={<Discover />} />
                 <Route path="/discover/*" element={<Discover />} />
@@ -233,6 +219,7 @@ function DashboardLayout() {
                 <Route path="/ai-scripts-old" element={<AIScripts />} />
                 <Route path="/account-search" element={<AccountSearch />} />
                 <Route path="/competitors" element={<Competitors />} />
+                <Route path="/competitors/:username/feed" element={<CompetitorFeed />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/help" element={<Help />} />
                 <Route path="/pricing" element={<Pricing />} />
@@ -248,8 +235,6 @@ function DashboardLayout() {
         </main>
       </div>
 
-      {/* Toast Notifications */}
-      <Toaster />
     </div>
   );
 }
@@ -275,6 +260,8 @@ function App() {
           <BrowserRouter>
             <ThemeProvider>
               <AuthProvider>
+                <ChatProvider>
+                  <WorkflowProvider>
                 {/* PWA Install Banner */}
                 <PWAInstallBanner />
 
@@ -304,8 +291,13 @@ function App() {
             {/* 404 catch all */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </WorkflowProvider>
+                </ChatProvider>
           </AuthProvider>
         </ThemeProvider>
+
+        {/* Global Toast Notifications */}
+        <Toaster />
       </BrowserRouter>
 
       {/* React Query DevTools - только в development */}

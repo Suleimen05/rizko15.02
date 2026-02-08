@@ -274,6 +274,7 @@ class ApiService {
     target?: string;
     keywords?: string[];
     mode?: 'keywords' | 'username';
+    platform?: 'tiktok' | 'instagram' | 'twitter' | 'reddit' | 'discord' | 'telegram' | 'youtube';  // Multi-platform support
     business_desc?: string;
     is_deep?: boolean;
     user_tier?: string;
@@ -289,6 +290,7 @@ class ApiService {
       target: params.target,
       keywords: params.keywords || [],
       mode: params.mode || 'keywords',
+      platform: params.platform || 'tiktok',  // Default to TikTok
       business_desc: params.business_desc || '',
       is_deep: params.is_deep || false,
       user_tier: params.user_tier || 'free',
@@ -604,6 +606,264 @@ class ApiService {
       context,
     });
     return response.data;
+  }
+
+  // ===========================================================================
+  // AUTH EXTENDED
+  // ===========================================================================
+
+  /**
+   * Server-side logout (blacklist token)
+   * POST /api/auth/logout
+   */
+  async logout(): Promise<void> {
+    try {
+      await apiClient.post('/auth/logout');
+    } catch {
+      // Ignore errors — we still clear local state
+    }
+  }
+
+  // ===========================================================================
+  // CHAT SESSIONS API
+  // ===========================================================================
+
+  /**
+   * Get credit balance
+   * GET /api/chat-sessions/credits
+   */
+  async getChatCredits(): Promise<{
+    credits: number;
+    monthly_limit: number;
+    tier: string;
+    model_costs: Record<string, number>;
+  }> {
+    const response = await apiClient.get('/chat-sessions/credits');
+    return response.data;
+  }
+
+  /**
+   * List chat sessions
+   * GET /api/chat-sessions/
+   */
+  async getChatSessions(): Promise<any[]> {
+    const response = await apiClient.get('/chat-sessions/');
+    return response.data;
+  }
+
+  /**
+   * Create chat session
+   * POST /api/chat-sessions/
+   */
+  async createChatSession(data: {
+    title?: string;
+    model?: string;
+    mode?: string;
+  }): Promise<any> {
+    const response = await apiClient.post('/chat-sessions/', data);
+    return response.data;
+  }
+
+  /**
+   * Get chat session by session_id
+   * GET /api/chat-sessions/:sessionId
+   */
+  async getChatSession(sessionId: string): Promise<any> {
+    const response = await apiClient.get(`/chat-sessions/${sessionId}`);
+    return response.data;
+  }
+
+  /**
+   * Rename chat session
+   * PATCH /api/chat-sessions/:sessionId
+   */
+  async updateChatSession(sessionId: string, data: { title: string }): Promise<any> {
+    const response = await apiClient.patch(`/chat-sessions/${sessionId}`, data);
+    return response.data;
+  }
+
+  /**
+   * Delete chat session
+   * DELETE /api/chat-sessions/:sessionId
+   */
+  async deleteChatSession(sessionId: string): Promise<void> {
+    await apiClient.delete(`/chat-sessions/${sessionId}`);
+  }
+
+  /**
+   * Get messages for a session
+   * GET /api/chat-sessions/:sessionId/messages
+   */
+  async getChatMessages(sessionId: string): Promise<any[]> {
+    const response = await apiClient.get(`/chat-sessions/${sessionId}/messages`);
+    return response.data;
+  }
+
+  /**
+   * Send message to AI
+   * POST /api/chat-sessions/:sessionId/messages
+   */
+  async sendChatMessage(
+    sessionId: string,
+    data: { message: string; mode?: string; model?: string }
+  ): Promise<any> {
+    const response = await apiClient.post(`/chat-sessions/${sessionId}/messages`, data);
+    return response.data;
+  }
+
+  // ===========================================================================
+  // WORKFLOWS API
+  // ===========================================================================
+
+  /**
+   * List workflows
+   * GET /api/workflows/
+   */
+  async getWorkflows(): Promise<any[]> {
+    const response = await apiClient.get('/workflows/');
+    return response.data;
+  }
+
+  /**
+   * Create workflow
+   * POST /api/workflows/
+   */
+  async createWorkflow(data: {
+    name?: string;
+    description?: string;
+    graph_data?: any;
+    node_configs?: any;
+    canvas_state?: any;
+  }): Promise<any> {
+    const response = await apiClient.post('/workflows/', data);
+    return response.data;
+  }
+
+  /**
+   * Get workflow by ID
+   * GET /api/workflows/:id
+   */
+  async getWorkflow(id: number): Promise<any> {
+    const response = await apiClient.get(`/workflows/${id}`);
+    return response.data;
+  }
+
+  /**
+   * Update workflow
+   * PATCH /api/workflows/:id
+   */
+  async updateWorkflow(id: number, data: {
+    name?: string;
+    description?: string;
+    graph_data?: any;
+    node_configs?: any;
+    canvas_state?: any;
+    tags?: string[];
+  }): Promise<any> {
+    const response = await apiClient.patch(`/workflows/${id}`, data);
+    return response.data;
+  }
+
+  /**
+   * Delete workflow
+   * DELETE /api/workflows/:id
+   */
+  async deleteWorkflow(id: number): Promise<void> {
+    await apiClient.delete(`/workflows/${id}`);
+  }
+
+  /**
+   * Duplicate workflow
+   * POST /api/workflows/:id/duplicate
+   */
+  async duplicateWorkflow(id: number): Promise<any> {
+    const response = await apiClient.post(`/workflows/${id}/duplicate`);
+    return response.data;
+  }
+
+  /**
+   * Execute workflow
+   * POST /api/workflows/execute
+   */
+  async executeWorkflow(data: {
+    nodes: any[];
+    connections: any[];
+    node_configs?: Record<string, any>;
+    workflow_id?: number;
+  }): Promise<any> {
+    const response = await apiClient.post('/workflows/execute', data, {
+      timeout: 300000, // 5 minutes for long workflows
+    });
+    return response.data;
+  }
+
+  /**
+   * Analyze video with Gemini Vision
+   * POST /api/workflows/analyze-video
+   */
+  async analyzeVideo(data: {
+    video_url: string;
+    video_metadata?: any;
+    custom_prompt?: string;
+  }): Promise<any> {
+    const response = await apiClient.post('/workflows/analyze-video', data, {
+      timeout: 180000, // 3 minutes for video analysis
+    });
+    return response.data;
+  }
+
+  /**
+   * List workflow templates
+   * GET /api/workflows/templates/list
+   */
+  async getWorkflowTemplates(): Promise<any[]> {
+    const response = await apiClient.get('/workflows/templates/list');
+    return response.data;
+  }
+
+  /**
+   * Create workflow from template
+   * POST /api/workflows/templates/:templateId/create
+   */
+  async createFromTemplate(templateId: string): Promise<any> {
+    const response = await apiClient.post(`/workflows/templates/${templateId}/create`);
+    return response.data;
+  }
+
+  /**
+   * Get workflow history
+   * GET /api/workflows/history/list
+   */
+  async getWorkflowHistory(limit?: number): Promise<any[]> {
+    const response = await apiClient.get('/workflows/history/list', {
+      params: limit ? { limit } : undefined,
+    });
+    return response.data;
+  }
+
+  /**
+   * Get workflow run detail
+   * GET /api/workflows/history/:runId
+   */
+  async getWorkflowRun(runId: number): Promise<any> {
+    const response = await apiClient.get(`/workflows/history/${runId}`);
+    return response.data;
+  }
+
+  /**
+   * Delete workflow run
+   * DELETE /api/workflows/history/:runId
+   */
+  async deleteWorkflowRun(runId: number): Promise<void> {
+    await apiClient.delete(`/workflows/history/${runId}`);
+  }
+
+  /**
+   * Clear all workflow history
+   * DELETE /api/workflows/history/clear
+   */
+  async clearWorkflowHistory(): Promise<void> {
+    await apiClient.delete('/workflows/history/clear');
   }
 
   // ===========================================================================

@@ -34,7 +34,9 @@ from .db import models
 
 # API Routers - Updated with new enterprise routes
 from .api import trends, profiles, competitors, ai_scripts, proxy, favorites
-from .api.routes import auth, oauth, feedback
+from .api.routes import auth, oauth, feedback, usage
+from .api import chat_sessions as chat_sessions_router
+from .api import workflows as workflows_router
 
 # Background Scheduler
 from .services.scheduler import start_scheduler
@@ -89,7 +91,7 @@ async def api_key_middleware(request: Request, call_next):
         return await call_next(request)
 
     # Skip protection if no key is set (development) or for public endpoints
-    public_paths = ["/", "/health", "/docs", "/redoc", "/openapi.json", "/api/auth/login", "/api/auth/register", "/api/auth/oauth/sync"]
+    public_paths = ["/", "/health", "/docs", "/redoc", "/openapi.json", "/api/auth/login", "/api/auth/register", "/api/auth/oauth/sync", "/api/proxy/image"]
 
     if API_SECRET_KEY and request.url.path not in public_paths:
         # Check for API key in header
@@ -254,6 +256,26 @@ app.include_router(
     feedback.router,
     prefix="/api",
     tags=["Feedback"]
+)
+
+# Usage routes (AI credits and statistics)
+app.include_router(
+    usage.router,
+    prefix="/api"
+)
+
+# Chat Sessions routes (AI chat with multi-model support)
+app.include_router(
+    chat_sessions_router.router,
+    prefix="/api/chat-sessions",
+    tags=["Chat Sessions"]
+)
+
+# Workflows routes (node-based AI workflow execution)
+app.include_router(
+    workflows_router.router,
+    prefix="/api/workflows",
+    tags=["Workflows"]
 )
 
 

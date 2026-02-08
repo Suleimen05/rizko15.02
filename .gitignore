@@ -63,3 +63,6 @@ yarn-error.log*
 *.temp
 .cache/
 API_REVIEW_ROADMAP.md
+
+# Claude AI skills (local context)
+.claude/

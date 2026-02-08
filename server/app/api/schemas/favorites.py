@@ -93,6 +93,7 @@ class TrendSummary(BaseModel):
     id: int
     platform_id: Optional[str] = None
     url: Optional[str] = None
+    play_addr: Optional[str] = None  # Direct CDN video URL for inline playback
     description: Optional[str] = None
     cover_url: Optional[str] = None
     author_username: Optional[str] = None

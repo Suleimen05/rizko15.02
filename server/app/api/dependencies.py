@@ -522,14 +522,146 @@ async def get_user_with_settings(
 class CreditManager:
     """
     Manages user credits for premium operations.
+
+    Credit System:
+    - Each plan has a monthly credit allocation
+    - Different AI models cost different credits per message
+    - Credits reset monthly based on credits_reset_at
     """
 
+    # Monthly credit allocation per subscription tier
+    PLAN_CREDITS: Dict[SubscriptionTier, int] = {
+        SubscriptionTier.FREE: 100,
+        SubscriptionTier.CREATOR: 1000,
+        SubscriptionTier.PRO: 5000,
+        SubscriptionTier.AGENCY: 10000,
+    }
+
+    # Credit cost per AI model (per message)
+    MODEL_COSTS: Dict[str, int] = {
+        "gemini": 1,    # Cheapest - Google's free-tier model
+        "claude": 5,    # Premium - Anthropic
+        "gpt4": 4,      # Premium - OpenAI
+    }
+
+    # Operation costs for non-chat features
     OPERATION_COSTS = {
         "deep_analyze": 5,
         "ai_script": 2,
         "competitor_add": 1,
         "export_report": 3,
     }
+
+    # Workflow node costs per model (AI nodes only - video/brand are free)
+    WORKFLOW_NODE_COSTS: Dict[str, Dict[str, int]] = {
+        "analyze":    {"gemini": 1, "claude": 5, "gpt4": 4},
+        "extract":    {"gemini": 1, "claude": 5, "gpt4": 4},
+        "style":      {"gemini": 1, "claude": 5, "gpt4": 4},
+        "generate":   {"gemini": 2, "claude": 6, "gpt4": 5},
+        "refine":     {"gemini": 1, "claude": 5, "gpt4": 4},
+        "script":     {"gemini": 1, "claude": 5, "gpt4": 4},
+        "storyboard": {"gemini": 2, "claude": 6, "gpt4": 5},
+    }
+
+    @classmethod
+    def get_workflow_node_cost(cls, node_type: str, model: str = "gemini") -> int:
+        """Get credit cost for a workflow node with specified model."""
+        costs = cls.WORKFLOW_NODE_COSTS.get(node_type)
+        if not costs:
+            return 0  # video, brand, etc. are free
+        return costs.get(model, costs.get("gemini", 1))
+
+    @classmethod
+    def estimate_workflow_cost(cls, nodes: list) -> int:
+        """Estimate total credit cost for running a workflow."""
+        total = 0
+        for node in nodes:
+            node_type = node.get("type", "") if isinstance(node, dict) else getattr(node, "type", "")
+            config = node.get("config") if isinstance(node, dict) else getattr(node, "config", None)
+            model = "gemini"
+            if config:
+                model = (config.get("model") if isinstance(config, dict) else getattr(config, "model", None)) or "gemini"
+            total += cls.get_workflow_node_cost(node_type, model)
+        return total
+
+    @classmethod
+    def get_monthly_limit(cls, tier: SubscriptionTier) -> int:
+        """Get monthly credit allocation for a subscription tier."""
+        return cls.PLAN_CREDITS.get(tier, 100)
+
+    @classmethod
+    def get_model_cost(cls, model: str) -> int:
+        """Get credit cost for an AI model per message."""
+        return cls.MODEL_COSTS.get(model, 1)
+
+    @classmethod
+    def check_and_reset_monthly(cls, user: User, db: Session) -> None:
+        """
+        Check if credits should be reset for the new month.
+        Resets credits to the plan's monthly allocation if a month has passed.
+        """
+        from dateutil.relativedelta import relativedelta
+
+        now = datetime.utcnow()
+
+        # If credits_reset_at is not set, initialize it
+        if user.credits_reset_at is None:
+            user.credits_reset_at = now + relativedelta(months=1)
+            monthly_limit = cls.get_monthly_limit(user.subscription_tier)
+            user.credits = monthly_limit
+            db.commit()
+            return
+
+        # Check if reset time has passed
+        if now >= user.credits_reset_at:
+            monthly_limit = cls.get_monthly_limit(user.subscription_tier)
+            user.credits = monthly_limit
+            user.credits_reset_at = now + relativedelta(months=1)
+            db.commit()
+
+    @classmethod
+    async def check_credits_for_chat(
+        cls,
+        model: str,
+        user: User,
+        db: Session
+    ) -> int:
+        """
+        Check if user has enough credits for an AI chat message.
+        Returns the cost if sufficient.
+        """
+        cost = cls.get_model_cost(model)
+
+        if user.credits < cost:
+            model_name = {"gemini": "Gemini", "claude": "Claude", "gpt4": "GPT-4"}.get(model, model)
+            monthly_limit = cls.get_monthly_limit(user.subscription_tier)
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "error": "Insufficient credits",
+                    "message": f"{model_name} requires {cost} credits, you have {user.credits}",
+                    "required": cost,
+                    "available": user.credits,
+                    "model": model,
+                    "monthly_limit": monthly_limit,
+                    "tier": user.subscription_tier.value if hasattr(user.subscription_tier, 'value') else str(user.subscription_tier),
+                    "upgrade_url": "/pricing"
+                }
+            )
+
+        return cost
+
+    @classmethod
+    async def deduct_credits(
+        cls,
+        cost: int,
+        user: User,
+        db: Session
+    ) -> int:
+        """Deduct credits after successful AI response. Returns remaining credits."""
+        user.credits = max(0, user.credits - cost)
+        db.commit()
+        return user.credits
 
     @classmethod
     async def check_and_deduct(
@@ -539,7 +671,7 @@ class CreditManager:
         db: Session
     ) -> None:
         """
-        Check if user has enough credits and deduct.
+        Check if user has enough credits and deduct (for non-chat operations).
 
         Raises:
             HTTPException: 402 if insufficient credits
@@ -565,6 +697,20 @@ class CreditManager:
     def get_operation_cost(cls, operation: str) -> int:
         """Get cost for an operation."""
         return cls.OPERATION_COSTS.get(operation, 1)
+
+    @classmethod
+    def get_credits_info(cls, user: User) -> Dict[str, Any]:
+        """Get full credit info for a user."""
+        tier = user.subscription_tier
+        monthly_limit = cls.get_monthly_limit(tier)
+        return {
+            "credits": user.credits,
+            "monthly_limit": monthly_limit,
+            "tier": tier.value if hasattr(tier, 'value') else str(tier),
+            "credits_reset_at": user.credits_reset_at.isoformat() if user.credits_reset_at else None,
+            "model_costs": cls.MODEL_COSTS,
+            "plan_credits": {k.value: v for k, v in cls.PLAN_CREDITS.items()},
+        }
 
 
 async def require_credits(

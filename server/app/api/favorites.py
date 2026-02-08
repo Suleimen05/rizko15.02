@@ -70,6 +70,7 @@ def get_favorites(
                 id=fav.trend.id,
                 platform_id=fav.trend.platform_id,
                 url=fav.trend.url,
+                play_addr=fav.trend.play_addr,  # Direct CDN URL for inline video playback
                 description=fav.trend.description,
                 cover_url=fav.trend.cover_url,
                 author_username=fav.trend.author_username,

@@ -18,6 +18,8 @@ from pydantic import BaseModel
 from ..core.database import get_db
 from ..db.models import Competitor, ProfileData, User
 from ..services.collector import TikTokCollector
+from ..services.instagram_collector import InstagramCollector
+from ..services.instagram_profile_adapter import adapt_instagram_profile_to_posts
 from ..services.scorer import TrendScorer
 from .dependencies import get_current_user, check_rate_limit, CreditManager
 from .schemas.competitors import (
@@ -30,7 +32,10 @@ from .schemas.competitors import (
     ChannelData,
     CompetitorMetrics,
     CompetitorVideo,
-    CompetitorVideoStats
+    CompetitorVideoStats,
+    CompetitorFeedResponse,
+    CompetitorFeedProfile,
+    CompetitorFeedVideo
 )
 
 logger = logging.getLogger(__name__)
@@ -68,13 +73,48 @@ def normalize_video_data(item: dict) -> dict:
     avatar = fix_tt_url(channel.get("avatar") or channel.get("avatarThumb"))
 
     video_obj = item.get("video") or item.get("videoMeta") or {}
-    cover = fix_tt_url(video_obj.get("cover") or video_obj.get("coverUrl") or item.get("cover_url"))
+    # Try multiple fallbacks for cover image
+    cover = fix_tt_url(
+        video_obj.get("cover") or
+        video_obj.get("coverUrl") or
+        video_obj.get("dynamicCover") or
+        video_obj.get("originCover") or
+        item.get("cover_url") or
+        item.get("coverUrl") or
+        item.get("videoCover") or
+        item.get("cover")
+    )
+
+    # Extract video URL for playback (video.url is the main field)
+    video_url = fix_tt_url(
+        video_obj.get("url") or
+        video_obj.get("playAddr") or
+        video_obj.get("downloadAddr") or
+        item.get("video_url") or
+        item.get("videoUrl")
+    )
+
+    # DEBUG: Print cover extraction
+    if not cover:
+        print(f"⚠️ WARNING: No cover found for video {item.get('id')}")
+        print(f"  - video_obj keys: {list(video_obj.keys())[:10] if video_obj else 'empty'}")
+        print(f"  - video.cover: {video_obj.get('cover', 'missing')[:50] if video_obj.get('cover') else 'null'}")
+
+    # Upload thumbnail to Supabase Storage (images only, not videos)
+    cover_url_final = cover
+    if cover:
+        uploaded_cover = SupabaseStorage.upload_thumbnail(cover)
+        if uploaded_cover:
+            cover_url_final = uploaded_cover
+        else:
+            logger.warning(f"Failed to upload thumbnail for video {item.get('id')}, using original URL")
 
     return {
         "id": str(item.get("id")),
         "title": item.get("title") or item.get("desc") or "",
         "url": item.get("postPage") or item.get("webVideoUrl") or item.get("url"),
-        "cover_url": cover,
+        "cover_url": cover_url_final,
+        "video_url": video_url,
         "uploaded_at": uploaded_at,
         "views": int(views),
         "stats": {
@@ -98,39 +138,68 @@ def normalize_video_data(item: dict) -> dict:
 @router.get("/search/{username}", response_model=ChannelSearchResult)
 def search_channel(
     username: str,
+    platform: str = "tiktok",
     current_user: User = Depends(check_rate_limit)
 ):
     """
-    Search for a TikTok channel by username.
+    Search for a channel by username (TikTok or Instagram).
 
     Returns basic profile info for preview before adding.
     No database storage - just live search.
+
+    Args:
+        username: Channel username (with or without @)
+        platform: "tiktok" or "instagram"
     """
     clean_username = username.lower().strip().replace("@", "")
 
-    logger.info(f"🔍 User {current_user.id} searching channel: @{clean_username}")
+    logger.info(f"🔍 User {current_user.id} searching {platform} channel: @{clean_username}")
 
-    collector = TikTokCollector()
-    raw_videos = collector.collect([clean_username], limit=5, mode="profile")
+    if platform == "instagram":
+        # Instagram search using profile scraper
+        collector = InstagramCollector()
+        raw_profiles = collector.collect([clean_username], limit=10, mode="profile")
 
-    if not raw_videos:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Channel @{clean_username} not found"
+        if not raw_profiles:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Instagram profile @{clean_username} not found"
+            )
+
+        # Extract profile data (instagram-profile-scraper returns profile object)
+        profile = raw_profiles[0]
+
+        return ChannelSearchResult(
+            username=profile.get("username", clean_username),
+            nickname=profile.get("fullName", clean_username),
+            avatar=profile.get("profilePicUrl", ""),
+            follower_count=profile.get("followersCount", 0),
+            video_count=len(profile.get("latestPosts", [])),
+            platform="instagram"
         )
+    else:
+        # TikTok search (existing logic)
+        collector = TikTokCollector()
+        raw_videos = collector.collect([clean_username], limit=5, mode="profile")
 
-    # Extract profile info from first video
-    first_vid = normalize_video_data(raw_videos[0])
-    author_info = first_vid["author"]
+        if not raw_videos:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"TikTok channel @{clean_username} not found"
+            )
 
-    return ChannelSearchResult(
-        username=clean_username,
-        nickname=author_info["username"],
-        avatar=author_info["avatar"] or "",
-        follower_count=author_info["followers"],
-        video_count=len(raw_videos),
-        platform="tiktok"
-    )
+        # Extract profile info from first video
+        first_vid = normalize_video_data(raw_videos[0])
+        author_info = first_vid["author"]
+
+        return ChannelSearchResult(
+            username=clean_username,
+            nickname=author_info["username"],
+            avatar=author_info["avatar"] or "",
+            follower_count=author_info["followers"],
+            video_count=len(raw_videos),
+            platform="tiktok"
+        )
 
 
 # =============================================================================
@@ -166,6 +235,7 @@ def get_all_competitors(
         CompetitorResponse(
             id=c.id,
             user_id=c.user_id,
+            platform=c.platform,
             username=c.username,
             display_name=c.display_name,
             avatar_url=c.avatar_url,
@@ -247,9 +317,12 @@ async def add_competitor(
         video_count = data.search_data.get("video_count") or 0
         display_name = data.search_data.get("nickname") or data.search_data.get("username") or clean_username
 
+        # Use original CDN URL - frontend will proxy it automatically
+
         # Create competitor with minimal data (no videos yet)
         competitor = Competitor(
             user_id=current_user.id,
+            platform=data.platform,
             username=clean_username,
             display_name=display_name,
             avatar_url=avatar_url,
@@ -276,16 +349,38 @@ async def add_competitor(
         return CompetitorResponse.model_validate(competitor)
 
     # Fallback: Fetch profile data from Apify (slower)
-    logger.info(f"📡 Fetching @{clean_username} from Apify (no cached data)")
+    logger.info(f"📡 Fetching @{clean_username} from {data.platform} Apify (no cached data)")
 
-    collector = TikTokCollector()
-    raw_videos = collector.collect([clean_username], limit=30, mode="profile")
+    if data.platform == "instagram":
+        # Instagram flow
+        collector = InstagramCollector()
+        raw_profiles = collector.collect([clean_username], limit=30, mode="profile")
 
-    if not raw_videos:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"TikTok profile @{clean_username} not found"
-        )
+        if not raw_profiles:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Instagram profile @{clean_username} not found"
+            )
+
+        # Extract profile and convert posts
+        profile = raw_profiles[0]
+        raw_videos = adapt_instagram_profile_to_posts(profile)
+
+        if not raw_videos:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Instagram profile @{clean_username} has no videos"
+            )
+    else:
+        # TikTok flow
+        collector = TikTokCollector()
+        raw_videos = collector.collect([clean_username], limit=30, mode="profile")
+
+        if not raw_videos:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"TikTok profile @{clean_username} not found"
+            )
 
     # Process videos
     scorer = TrendScorer()
@@ -321,12 +416,16 @@ async def add_competitor(
     first_vid = clean_videos[0]
     author_info = first_vid["author"]
 
+    # Use original CDN URL - frontend will proxy it automatically
+    avatar_url = author_info["avatar"]
+
     # Create competitor record
     competitor = Competitor(
         user_id=current_user.id,  # Proper FK relationship
+        platform=data.platform,
         username=clean_username,
         display_name=author_info["username"],
-        avatar_url=author_info["avatar"],
+        avatar_url=avatar_url,
         bio="",
         followers_count=author_info["followers"],
         total_videos=len(clean_videos),
@@ -610,3 +709,205 @@ def spy_competitor(
         content_categories=competitor.content_categories,
         last_analyzed_at=competitor.last_analyzed_at
     )
+
+
+# =============================================================================
+# COMPETITOR FEED (NEW!)
+# =============================================================================
+
+@router.get("/{username}/feed", response_model=CompetitorFeedResponse)
+def get_competitor_feed(
+    username: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get competitor's full feed with recent videos.
+    
+    Returns:
+    - Profile data (username, avatar, followers, etc.)
+    - Recent videos (with is_new flag for last 24h)
+    
+    User Isolation: Only returns data if competitor belongs to authenticated user.
+    """
+    clean_username = username.lower().strip().replace("@", "")
+    
+    # Get competitor from database
+    competitor = db.query(Competitor).filter(
+        Competitor.user_id == current_user.id,
+        Competitor.username == clean_username
+    ).first()
+    
+    if not competitor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Competitor @{clean_username} not found in your tracking list"
+        )
+    
+    logger.info(f"📊 User {current_user.id} viewing feed for @{clean_username}")
+
+    # ALWAYS fetch fresh data because TikTok URLs expire quickly (signature becomes invalid)
+    # Even URLs that are only 20 minutes old return 403 failure-bad-signature
+    from datetime import datetime, timedelta
+    from app.services.collector import TikTokCollector
+
+    should_refresh = False
+    if competitor.last_analyzed_at:
+        minutes_since_check = (datetime.utcnow() - competitor.last_analyzed_at).total_seconds() / 60
+        # Refresh if data is older than 5 minutes (TikTok CDN signatures expire quickly)
+        if minutes_since_check > 5:
+            logger.warning(f"⚠️ Competitor @{clean_username} data is {minutes_since_check:.1f} minutes old - fetching fresh data")
+            should_refresh = True
+    else:
+        should_refresh = True
+
+    # Fetch fresh data synchronously so we return valid URLs
+    if should_refresh:
+        try:
+            from app.services.trend_scorer import TrendScorer
+            from app.api.utils import normalize_video_data
+
+            collector = TikTokCollector()
+            scorer = TrendScorer()
+
+            logger.info(f"🔄 Fetching fresh data from Apify for @{clean_username}...")
+            raw_videos = collector.collect([clean_username], limit=30, mode="profile")
+
+            if raw_videos:
+                # Process and update competitor data
+                clean_videos = []
+                total_views = 0
+                total_engagement = 0
+
+                for raw in raw_videos:
+                    vid = normalize_video_data(raw)
+                    scorer_data = {
+                        "views": vid["views"],
+                        "author_followers": vid["author"]["followers"],
+                        "collect_count": 0,
+                        "share_count": vid["stats"]["shareCount"]
+                    }
+                    vid["uts_score"] = scorer.calculate_uts(scorer_data, history_data=None, cascade_count=1)
+                    clean_videos.append(vid)
+                    total_views += vid["views"]
+                    total_engagement += vid["stats"]["diggCount"] + vid["stats"]["commentCount"]
+
+                # Update competitor in database
+                if clean_videos:
+                    author_info = clean_videos[0]["author"]
+                    avg_views = total_views / len(clean_videos) if clean_videos else 0
+                    engagement_rate = (total_engagement / total_views * 100) if total_views > 0 else 0
+
+                    competitor.display_name = author_info.get("username", clean_username)
+                    competitor.avatar_url = author_info.get("avatar", competitor.avatar_url)
+                    competitor.bio = author_info.get("bio", "")
+                    competitor.followers_count = author_info.get("followers", 0)
+                    competitor.total_videos = len(clean_videos)
+                    competitor.avg_views = avg_views
+                    competitor.engagement_rate = engagement_rate
+                    competitor.recent_videos = clean_videos
+                    competitor.last_analyzed_at = datetime.utcnow()
+
+                    db.commit()
+                    db.refresh(competitor)
+                    logger.info(f"✅ Fresh data fetched and updated for @{clean_username}: {len(clean_videos)} videos")
+            else:
+                logger.warning(f"No videos returned from Apify for @{clean_username}")
+        except Exception as e:
+            logger.error(f"Failed to fetch fresh data for @{clean_username}: {e}")
+            # Continue with stale data as fallback
+
+    # Build profile data
+    profile = CompetitorFeedProfile(
+        username=competitor.username,
+        nickname=competitor.display_name or competitor.username,
+        avatar_url=competitor.avatar_url,
+        bio=competitor.bio or "",
+        followers_count=competitor.followers_count,
+        total_videos=competitor.total_videos,
+        avg_views=competitor.avg_views,
+        engagement_rate=competitor.engagement_rate,
+        created_at=competitor.created_at.isoformat(),
+        last_checked_at=competitor.last_analyzed_at.isoformat() if competitor.last_analyzed_at else None
+    )
+    
+    # Get videos from recent_videos field (JSONB)
+    videos_data = competitor.recent_videos or []
+
+    # DEBUG: Check what's in recent_videos
+    logger.info(f"🔍 FEED DEBUG: recent_videos count = {len(videos_data)}")
+    if videos_data:
+        first = videos_data[0]
+        logger.info(f"🔍 FEED DEBUG: First video keys = {list(first.keys())}")
+        logger.info(f"🔍 FEED DEBUG: cover_url = {first.get('cover_url', 'MISSING')[:100] if first.get('cover_url') else 'None'}")
+
+    # Calculate cutoff time for "new" videos (last 24 hours)
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    cutoff_time = now - timedelta(hours=24)
+    
+    # Build feed videos
+    feed_videos = []
+    for vid in videos_data[:20]:  # Limit to 20 most recent
+        # Determine if video is "new" (posted in last 24h)
+        uploaded_at = vid.get("uploaded_at", 0)
+        is_new = False
+        
+        if uploaded_at and uploaded_at > 0:
+            try:
+                video_date = datetime.fromtimestamp(uploaded_at)
+                is_new = video_date > cutoff_time
+            except:
+                is_new = False
+        
+        # Format video data
+        cover_url_value = vid.get("cover_url")
+        logger.info(f"🔍 FEED VIDEO DEBUG: id={vid.get('id', 'NO_ID')[:20]}, cover_url={cover_url_value[:100] if cover_url_value else 'None'}")
+
+        feed_video = CompetitorFeedVideo(
+            id=vid.get("id", ""),
+            title=vid.get("title", ""),
+            description=vid.get("title", ""),  # TikTok doesn't have separate description
+            thumbnail_url=cover_url_value,
+            video_url=vid.get("video_url"),  # Add video URL for playback
+            url=vid.get("url", ""),
+            stats=CompetitorVideoStats(
+                playCount=vid.get("stats", {}).get("playCount", 0),
+                diggCount=vid.get("stats", {}).get("diggCount", 0),
+                commentCount=vid.get("stats", {}).get("commentCount", 0),
+                shareCount=vid.get("stats", {}).get("shareCount", 0),
+            ),
+            posted_at=datetime.fromtimestamp(uploaded_at).isoformat() if uploaded_at > 0 else now.isoformat(),
+            uts_score=vid.get("uts_score", 0.0),
+            is_new=is_new
+        )
+
+        logger.info(f"🔍 FEED VIDEO OBJECT: thumbnail_url={feed_video.thumbnail_url[:100] if feed_video.thumbnail_url else 'None'}")
+        feed_videos.append(feed_video)
+    
+    logger.info(f"✅ Returned {len(feed_videos)} videos for @{clean_username} ({sum(1 for v in feed_videos if v.is_new)} new)")
+
+    response = CompetitorFeedResponse(
+        profile=profile,
+        videos=feed_videos
+    )
+
+    # DEBUG: Check final response
+    logger.info(f"🔍 FINAL RESPONSE: profile.avatar_url={response.profile.avatar_url[:100] if response.profile.avatar_url else 'None'}")
+    if response.videos:
+        logger.info(f"🔍 FINAL RESPONSE: first video thumbnail_url={response.videos[0].thumbnail_url[:100] if response.videos[0].thumbnail_url else 'None'}")
+        # Log the actual JSON dict to see what's being sent
+        import json
+        first_video_dict = response.videos[0].dict()
+        logger.info(f"🔍 FINAL RESPONSE JSON: first video = {json.dumps(first_video_dict, indent=2)[:500]}")
+
+        # Write to debug file
+        with open("/tmp/competitor_feed_debug.json", "w") as f:
+            json.dump({
+                "profile": response.profile.dict(),
+                "first_video": first_video_dict,
+                "total_videos": len(response.videos)
+            }, f, indent=2)
+        logger.info("📝 Wrote debug info to /tmp/competitor_feed_debug.json")
+
+    return response

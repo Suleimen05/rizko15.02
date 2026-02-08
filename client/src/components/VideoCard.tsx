@@ -273,33 +273,25 @@ UTS Score: ${video.uts_score || video.viralScore || 0}
         }}
         onClick={(e) => {
           e.preventDefault();
-          if (!isPlaying && videoId) {
+          if (!isPlaying && playAddr) {
             setIsPlaying(true); // Start video playback on click
           }
         }}
       >
         {/* Thumbnail */}
         <div className="relative aspect-[9/16] overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900">
-          {isPlaying && videoId ? (
-            // TikTok Official Embed - легальное решение
-            <div className="relative h-full w-full bg-black">
-              <button
-                className="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-black/70 hover:bg-black/90 flex items-center justify-center text-white"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsPlaying(false);
-                }}
-              >
-                ✕
-              </button>
-              <iframe
-                src={`https://www.tiktok.com/embed/v2/${videoId}?autoplay=1`}
-                className="w-full h-full"
-                style={{ border: 'none', minHeight: '400px' }}
-                allowFullScreen
-                allow="autoplay; encrypted-media; picture-in-picture"
-              />
-            </div>
+          {isPlaying && playAddr ? (
+            // HTML5 Video Player with direct CDN URL
+            <video
+              src={playAddr}
+              className="w-full h-full object-cover"
+              controls
+              autoPlay
+              muted={false}
+              playsInline
+              onEnded={() => setIsPlaying(false)}
+              onClick={(e) => e.stopPropagation()}
+            />
           ) : coverImage && coverImage !== '/placeholder-video.svg' ? (
             <img
               src={coverImage}

@@ -4,16 +4,20 @@ Production-ready implementation with proper error handling and security.
 """
 import os
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from ...core.database import get_db
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from ...core.security import (
     verify_password,
     get_password_hash,
     create_access_token,
     create_refresh_token,
-    decode_token
+    decode_token,
+    token_blacklist,
 )
+
+auth_security = HTTPBearer(auto_error=False)
 from ...db.models import User, UserSettings
 from ..schemas.auth import (
     UserRegister,
@@ -376,6 +380,30 @@ async def sync_oauth_user(data: OAuthSyncRequest, db: Session = Depends(get_db))
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OAuth sync failed: {str(e)}"
         )
+
+
+# =============================================================================
+# LOGOUT (server-side token revocation)
+# =============================================================================
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Logout user by blacklisting the current access token.
+    The token's jti is added to the server-side blacklist,
+    preventing further use even before expiration.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        payload = decode_token(token)
+        if payload and payload.get("jti"):
+            token_blacklist.blacklist(payload["jti"])
+
+    return {"status": "logged_out"}
 
 
 # =============================================================================

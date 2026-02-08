@@ -22,7 +22,11 @@ class CompetitorCreate(BaseModel):
         ...,
         min_length=1,
         max_length=100,
-        description="TikTok username to track"
+        description="Username to track (TikTok or Instagram)"
+    )
+    platform: str = Field(
+        default="tiktok",
+        description="Platform: tiktok or instagram"
     )
     notes: str = Field(
         default="",
@@ -133,6 +137,7 @@ class CompetitorResponse(BaseModel):
     """Full competitor response."""
     id: int
     user_id: int
+    platform: str = "tiktok"  # 'tiktok' or 'instagram'
     username: str
     display_name: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -238,3 +243,41 @@ class BulkActionResult(BaseModel):
     failed_count: int
     results: List[Dict[str, Any]] = []
     errors: List[str] = []
+
+
+# =============================================================================
+# FEED SCHEMAS (NEW!)
+# =============================================================================
+
+class CompetitorFeedVideo(BaseModel):
+    """Video in competitor feed with is_new flag."""
+    id: str
+    title: str
+    description: str = ""
+    thumbnail_url: Optional[str] = None
+    video_url: Optional[str] = None  # URL for video playback
+    url: str
+    stats: CompetitorVideoStats
+    posted_at: str  # ISO 8601 datetime string
+    uts_score: Optional[float] = None
+    is_new: bool = False
+
+
+class CompetitorFeedProfile(BaseModel):
+    """Profile data for feed page."""
+    username: str
+    nickname: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    followers_count: int = 0
+    total_videos: int = 0
+    avg_views: float = 0.0
+    engagement_rate: float = 0.0
+    created_at: str  # ISO 8601 datetime string
+    last_checked_at: Optional[str] = None
+
+
+class CompetitorFeedResponse(BaseModel):
+    """Complete feed response with profile and videos."""
+    profile: CompetitorFeedProfile
+    videos: List[CompetitorFeedVideo]

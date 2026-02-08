@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import type { Competitor } from '@/types';
 import { toast } from 'sonner';
 import { apiClient } from '@/services/api';
+import { proxyAvatarUrl } from '@/utils/imageProxy';
 
 interface CompetitorCardProps {
   competitor: Competitor;
@@ -21,71 +22,124 @@ function CompetitorCard({ competitor, onRemove, onViewDetails }: CompetitorCardP
     return num.toString();
   };
 
+  const formatTimeAgo = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${Math.floor(diffHours / 24)}d ago`;
+  };
+
+  // Mock: check if competitor has new videos (you'll get this from backend later)
+  const hasNewVideos = competitor.lastActivity &&
+    new Date(competitor.lastActivity).getTime() > Date.now() - 24 * 60 * 60 * 1000;
+
   return (
-    <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer" onClick={() => onViewDetails(competitor)}>
+    <Card
+      className="group hover:shadow-lg hover:border-purple-600/50 transition-all duration-300 cursor-pointer relative overflow-hidden"
+      onClick={() => onViewDetails(competitor)}
+    >
+      {/* New Videos Indicator */}
+      {hasNewVideos && (
+        <div className="absolute top-2 right-2 z-10">
+          <Badge className="bg-red-500 text-white text-xs animate-pulse">
+            🔴 NEW
+          </Badge>
+        </div>
+      )}
+
       <CardContent className="p-4">
         {/* Avatar + Username */}
         <div className="flex items-center gap-3 mb-3">
           <div className="relative flex-shrink-0">
             <img
-              src={competitor.avatar || '/placeholder-avatar.svg'}
+              src={proxyAvatarUrl(competitor.avatar)}
               alt={competitor.username}
-              className="h-12 w-12 rounded-full object-cover"
+              className="h-14 w-14 rounded-full object-cover ring-2 ring-purple-600/20 group-hover:ring-purple-600/50 transition-all"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = '/placeholder-avatar.svg';
               }}
             />
-            {/* TikTok badge */}
-            <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-background border border-background flex items-center justify-center">
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
-              </svg>
+            {/* Platform badge */}
+            <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-background border-2 border-background flex items-center justify-center">
+              {competitor.platform === 'instagram' ? (
+                <span className="text-base">📸</span>
+              ) : (
+                <svg className="w-3.5 h-3.5 text-purple-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                </svg>
+              )}
             </div>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold truncate">@{competitor.username}</p>
-            <p className="text-xs text-muted-foreground">
-              {formatNumber(competitor.followerCount)} followers
-            </p>
+            <p className="font-bold truncate text-base">@{competitor.username}</p>
+            {competitor.nickname && competitor.nickname !== competitor.username && (
+              <p className="text-xs text-muted-foreground truncate">{competitor.nickname}</p>
+            )}
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="space-y-1.5 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground text-xs">Videos:</span>
-            <span className="font-medium">{competitor.videoCount}</span>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
+          <div className="text-center p-2 bg-muted/50 rounded">
+            <div className="font-bold text-sm">{formatNumber(competitor.followerCount)}</div>
+            <div className="text-muted-foreground">Followers</div>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground text-xs">Avg Views:</span>
-            <span className="font-medium">{formatNumber(competitor.avgViews)}</span>
+          <div className="text-center p-2 bg-muted/50 rounded">
+            <div className="font-bold text-sm">{competitor.videoCount}</div>
+            <div className="text-muted-foreground">Videos</div>
           </div>
+          <div className="text-center p-2 bg-muted/50 rounded">
+            <div className="font-bold text-sm">{formatNumber(competitor.avgViews)}</div>
+            <div className="text-muted-foreground">Avg Views</div>
+          </div>
+        </div>
+
+        {/* Status */}
+        <div className="mb-3 p-2 bg-muted/30 rounded text-xs">
+          {hasNewVideos ? (
+            <div className="flex items-center gap-1 text-red-500 font-medium">
+              <span>🆕</span>
+              <span>New video {formatTimeAgo(competitor.lastActivity)}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <span>✅</span>
+              <span>Up to date • Last activity {formatTimeAgo(competitor.lastActivity)}</span>
+            </div>
+          )}
         </div>
 
         {/* Actions */}
-        <div className="flex gap-2 mt-4 pt-3 border-t">
+        <div className="flex gap-2">
           <Button
-            variant="outline"
+            variant="default"
             size="sm"
-            className="flex-1 text-xs"
+            className="flex-1 text-xs bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
             onClick={(e) => {
               e.stopPropagation();
               onViewDetails(competitor);
             }}
           >
-            View
+            View Feed
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className="text-xs text-red-500 hover:text-red-600"
+            className="text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
             onClick={(e) => {
               e.stopPropagation();
-              onRemove(competitor);
+              if (confirm(`Remove @${competitor.username} from tracking?`)) {
+                onRemove(competitor);
+              }
             }}
           >
-            Remove
+            Untrack
           </Button>
         </div>
       </CardContent>
@@ -100,6 +154,7 @@ export function Competitors() {
   const [searchResults, setSearchResults] = useState<any>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [searchPlatform, setSearchPlatform] = useState<'tiktok' | 'instagram'>('tiktok');
   const [_showFilters, _setShowFilters] = useState(false);
   const [_filterPlatform, _setFilterPlatform] = useState<'all' | 'tiktok' | 'instagram'>('all');
   const [_filterSort, _setFilterSort] = useState<'recent' | 'followers' | 'engagement'>('recent');
@@ -123,6 +178,7 @@ export function Competitors() {
         topVideos: [],
         growthTrend: 'stable' as const,
         lastActivity: c.updated_at,
+        platform: c.platform || 'tiktok', // Add platform field
       })));
     } catch (error) {
       console.error('Error loading competitors:', error);
@@ -147,8 +203,15 @@ export function Competitors() {
       return tiktokMatch[1];
     }
 
-    // Убираем @ если есть
-    return trimmed.replace('@', '');
+    // Если это Instagram URL, извлекаем username
+    // Поддерживаем: instagram.com/username, instagram.com/username/, instagram.com/username/reels/
+    const instagramMatch = trimmed.match(/instagram\.com\/([a-zA-Z0-9._]+)/);
+    if (instagramMatch) {
+      return instagramMatch[1];
+    }
+
+    // Убираем @ и слэши если есть
+    return trimmed.replace('@', '').replace(/\/$/, '');
   };
 
   // Поиск канала
@@ -160,12 +223,12 @@ export function Competitors() {
     try {
       setIsSearching(true);
       setSearchResults(null);
-      const response = await apiClient.get(`/competitors/search/${cleanUsername}`);
+      const response = await apiClient.get(`/competitors/search/${cleanUsername}?platform=${searchPlatform}`);
       setSearchResults(response.data);
     } catch (error: any) {
       console.error('Search error:', error);
       if (error.response?.status === 404) {
-        toast.error(`Channel @${cleanUsername} not found`);
+        toast.error(`${searchPlatform === 'instagram' ? 'Instagram' : 'TikTok'} channel @${cleanUsername} not found`);
       } else {
         toast.error('Search failed. Try again.');
       }
@@ -182,6 +245,7 @@ export function Competitors() {
       // Передаем search_data чтобы избежать повторного запроса к Apify
       await apiClient.post('/competitors/', {
         username: channel.username,
+        platform: channel.platform || searchPlatform,
         notes: '',
         search_data: {
           avatar: channel.avatar,
@@ -219,8 +283,8 @@ export function Competitors() {
   };
 
   const handleViewDetails = (competitor: Competitor) => {
-    // Navigate to details page or open modal
-    toast.info(`Viewing details for @${competitor.username}`);
+    // Navigate to feed page
+    window.location.href = `/dashboard/competitors/${competitor.username}/feed`;
   };
 
   const filteredCompetitors = competitors;
@@ -248,11 +312,32 @@ export function Competitors() {
           <Search className="h-5 w-5" />
           Search & Add Channels
         </h3>
+
+        {/* Platform Selector */}
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant={searchPlatform === 'tiktok' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSearchPlatform('tiktok')}
+            className="gap-2"
+          >
+            🎵 TikTok
+          </Button>
+          <Button
+            variant={searchPlatform === 'instagram' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSearchPlatform('instagram')}
+            className="gap-2"
+          >
+            📸 Instagram
+          </Button>
+        </div>
+
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Enter @username..."
+              placeholder={`Enter ${searchPlatform === 'instagram' ? 'Instagram' : 'TikTok'} @username...`}
               className="pl-10"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -260,7 +345,7 @@ export function Competitors() {
               disabled={isSearching}
             />
           </div>
-          <Button 
+          <Button
             onClick={handleSearchChannel}
             disabled={!searchQuery.trim() || isSearching}
           >
@@ -281,7 +366,7 @@ export function Competitors() {
             <p className="text-sm text-muted-foreground mb-3">Search Result:</p>
             <div className="flex items-center gap-4">
               <img
-                src={searchResults.avatar || '/placeholder-avatar.svg'}
+                src={proxyAvatarUrl(searchResults.avatar)}
                 alt={searchResults.username}
                 className="h-12 w-12 rounded-full"
                 onError={(e) => {

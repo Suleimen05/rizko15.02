@@ -41,6 +41,22 @@ class SearchMode(str, enum.Enum):
     USERNAME = "username"
 
 
+class WorkflowStatus(str, enum.Enum):
+    """Workflow execution status."""
+    DRAFT = "draft"
+    READY = "ready"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class WorkflowRunStatus(str, enum.Enum):
+    """Workflow run execution status."""
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
 # =============================================================================
 # USER MODELS
 # =============================================================================
@@ -71,8 +87,14 @@ class User(Base):
         default=SubscriptionTier.FREE,
         nullable=False
     )
-    credits = Column(Integer, default=10, nullable=False)
+    credits = Column(Integer, default=10, nullable=False)  # Legacy field (kept for backward compatibility)
     credits_reset_at = Column(DateTime, nullable=True)
+
+    # AI Credits System (Phase 1)
+    monthly_credits_limit = Column(Integer, default=100, nullable=False)  # Plan-based limit (100/500/2000/10000)
+    monthly_credits_used = Column(Integer, default=0, nullable=False)  # Credits spent this month
+    bonus_credits = Column(Integer, default=0, nullable=False)  # Bonus credits (never expire)
+    rollover_credits = Column(Integer, default=0, nullable=False)  # Credits rolled over from previous month
 
     # Account status
     is_active = Column(Boolean, default=True, nullable=False)
@@ -138,6 +160,24 @@ class User(Base):
         cascade="all, delete-orphan",
         lazy="dynamic"
     )
+    chat_sessions = relationship(
+        "ChatSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
+    )
+    workflows = relationship(
+        "Workflow",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
+    )
+    workflow_runs = relationship(
+        "WorkflowRun",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
+    )
 
     # Composite index for OAuth lookups
     __table_args__ = (
@@ -177,6 +217,7 @@ class UserSettings(Base):
         default=SearchMode.KEYWORDS,
         nullable=False
     )
+    ai_auto_mode = Column(Boolean, default=True, nullable=False)  # Auto-select AI model based on complexity
 
     # Notification Preferences
     notifications_email = Column(Boolean, default=True, nullable=False)
@@ -229,6 +270,7 @@ class Trend(Base):
     # TikTok Video Identification
     platform_id = Column(String(100), index=True)  # TikTok video ID
     url = Column(String(500), index=True)  # Video URL
+    play_addr = Column(String(500), nullable=True)  # Direct CDN video playback URL
 
     # Content
     description = Column(Text)
@@ -474,6 +516,51 @@ class ChatMessage(Base):
         return f"<ChatMessage(id={self.id}, role='{self.role}', session='{self.session_id}')>"
 
 
+class ChatSession(Base):
+    """
+    AI chat session metadata.
+    Groups chat messages into conversations with titles and metadata.
+    """
+    __tablename__ = "chat_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Session identification
+    session_id = Column(String(100), unique=True, nullable=False, index=True)
+    title = Column(String(255), nullable=False, default="New Chat")
+
+    # Context (optional linked video/trend)
+    context_type = Column(String(50), nullable=True)
+    context_id = Column(Integer, nullable=True)
+    context_data = Column(JSONB, default={}, nullable=False)
+
+    # Session metadata
+    model = Column(String(50), default="gemini", nullable=False)
+    mode = Column(String(50), default="script", nullable=False)
+    message_count = Column(Integer, default=0, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="chat_sessions")
+
+    # Indexes
+    __table_args__ = (
+        Index('ix_chat_sessions_user_updated', 'user_id', 'updated_at'),
+    )
+
+    def __repr__(self):
+        return f"<ChatSession(id={self.id}, user_id={self.user_id}, title='{self.title[:30]}')>"
+
+
 # =============================================================================
 # COMPETITOR TRACKING
 # =============================================================================
@@ -497,10 +584,11 @@ class Competitor(Base):
         index=True
     )
 
-    # TikTok Profile Info
+    # Profile Info (TikTok or Instagram)
+    platform = Column(String(20), nullable=False, default="tiktok", index=True)  # 'tiktok' or 'instagram'
     username = Column(String(100), nullable=False, index=True)
     display_name = Column(String(255), nullable=True)
-    avatar_url = Column(String(500), nullable=True)
+    avatar_url = Column(String(1000), nullable=True)
     bio = Column(Text, nullable=True)
 
     # Profile Metrics
@@ -715,3 +803,133 @@ class Feedback(Base):
 
     def __repr__(self):
         return f"<Feedback(id={self.id}, type='{self.feedback_type}', user_id={self.user_id})>"
+
+
+
+# =============================================================================
+# WORKFLOW MODELS
+# =============================================================================
+
+class Workflow(Base):
+    """
+    User's saved workflow definitions.
+    Stores the full node graph, connections, and per-node configuration as JSONB.
+    """
+    __tablename__ = "workflows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Identification
+    name = Column(String(255), nullable=False, default="Untitled Workflow")
+    description = Column(Text, nullable=True)
+
+    # Graph data: {"nodes": [...], "connections": [...]}
+    graph_data = Column(JSONB, default={"nodes": [], "connections": []}, nullable=False)
+
+    # Per-node config overrides
+    node_configs = Column(JSONB, default={}, nullable=False)
+
+    # Execution state
+    status = Column(
+        SQLEnum(WorkflowStatus, values_callable=lambda x: [e.value for e in x]),
+        default=WorkflowStatus.DRAFT,
+        nullable=False
+    )
+    last_run_at = Column(DateTime, nullable=True)
+    last_run_results = Column(JSONB, default={}, nullable=False)
+
+    # Template metadata
+    is_template = Column(Boolean, default=False, nullable=False)
+    template_category = Column(String(100), nullable=True)
+
+    # Canvas state (zoom, pan)
+    canvas_state = Column(JSONB, default={"zoom": 1, "panX": 0, "panY": 0}, nullable=False)
+
+    # Organization
+    tags = Column(JSONB, default=[], nullable=False)
+    is_favorite = Column(Boolean, default=False, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="workflows")
+    runs = relationship("WorkflowRun", back_populates="workflow", cascade="all, delete-orphan", lazy="dynamic")
+
+    __table_args__ = (
+        Index('ix_workflows_user_updated', 'user_id', 'updated_at'),
+        Index('ix_workflows_user_status', 'user_id', 'status'),
+    )
+
+    def __repr__(self):
+        return f"<Workflow(id={self.id}, user_id={self.user_id}, name='{self.name[:30]}')>"
+
+
+class WorkflowRun(Base):
+    """
+    Workflow execution history.
+    Stores each run of a workflow with inputs, outputs, and metadata.
+    """
+    __tablename__ = "workflow_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    workflow_id = Column(
+        Integer,
+        ForeignKey("workflows.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+
+    # Run identification
+    workflow_name = Column(String(255), nullable=False)
+    run_number = Column(Integer, default=1, nullable=False)
+
+    # Execution status
+    status = Column(
+        SQLEnum(WorkflowRunStatus, values_callable=lambda x: [e.value for e in x]),
+        default=WorkflowRunStatus.RUNNING,
+        nullable=False
+    )
+
+    # Input snapshot
+    input_graph = Column(JSONB, default={}, nullable=False)
+    node_count = Column(Integer, default=0, nullable=False)
+
+    # Results
+    results = Column(JSONB, default=[], nullable=False)
+    final_script = Column(Text, nullable=True)
+    storyboard = Column(Text, nullable=True)
+
+    # Metrics
+    credits_used = Column(Integer, default=0, nullable=False)
+    execution_time_ms = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    # Timestamps
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="workflow_runs")
+    workflow = relationship("Workflow", back_populates="runs")
+
+    __table_args__ = (
+        Index('ix_workflow_runs_user_started', 'user_id', 'started_at'),
+        Index('ix_workflow_runs_workflow', 'workflow_id', 'started_at'),
+    )
+
+    def __repr__(self):
+        return f"<WorkflowRun(id={self.id}, workflow='{self.workflow_name}', status={self.status})>"

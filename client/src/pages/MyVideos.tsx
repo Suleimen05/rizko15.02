@@ -191,10 +191,10 @@ export function MyVideosPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
             <Video className="h-7 w-7" />
-            My Videos
+            My Posts
           </h1>
           <p className="text-muted-foreground">
-            View and analyze your video performance
+            View and analyze your post performance
           </p>
         </div>
 

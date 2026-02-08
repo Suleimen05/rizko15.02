@@ -21,6 +21,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { User } from '@/types';
+import { apiService } from '@/services/api';
 
 // =============================================================================
 // TYPES
@@ -308,6 +309,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (storedData?.tokens?.refreshToken) {
         const refreshed = await refreshTokens();
         if (refreshed) {
+          // BUG FIX: after successful refresh, set isLoading: false
+          setState((prev) => ({ ...prev, isLoading: false }));
           return;
         }
       }
@@ -561,6 +564,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Clear refresh timer
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
+      }
+
+      // Server-side logout: blacklist current token
+      try {
+        await apiService.logout();
+      } catch {
+        // Ignore — we still clear local state
       }
 
       // Sign out from Supabase (if using OAuth)

@@ -236,6 +236,7 @@ export interface Competitor {
   topVideos: TikTokVideo[];
   growthTrend: 'up' | 'down' | 'stable';
   lastActivity: string;
+  platform?: string;
 }
 
 export interface User {
@@ -261,8 +262,20 @@ export interface DashboardStats {
   weeklyGrowth: number;
 }
 
+// Platform types for multi-platform support
+export type Platform = 'tiktok' | 'instagram' | 'twitter' | 'reddit' | 'discord' | 'telegram' | 'youtube';
+
+export interface PlatformConfig {
+  id: Platform;
+  name: string;
+  icon: string;
+  color: string;
+  enabled: boolean;
+}
+
 export interface SearchFilters {
   niche?: string;
+  platform?: Platform;  // Multi-platform support
   region?: string;
   language?: string;
   minViews?: number;
@@ -386,4 +399,126 @@ export interface UpgradeRequiredError {
   current_tier: SubscriptionTier;
   required_tier: SubscriptionTier;
   features: string[];          // List of features user is missing
+}
+
+// ==================== WORKFLOW / CHAT SESSION TYPES ====================
+
+// Workflow Node Types
+export type WorkflowNodeType =
+  | 'video'
+  | 'brand'
+  | 'analyze'
+  | 'extract'
+  | 'style'
+  | 'generate'
+  | 'refine'
+  | 'script'
+  | 'storyboard';
+
+export interface WorkflowNodeConfig {
+  customPrompt?: string;
+  model?: string;
+  brandContext?: string;
+  outputFormat?: string;
+}
+
+export interface WorkflowNode {
+  id: number;
+  type: WorkflowNodeType;
+  x: number;
+  y: number;
+  videoData?: SavedVideo;
+  outputContent?: string;
+  config?: WorkflowNodeConfig;
+}
+
+export interface WorkflowConnection {
+  from: number;
+  to: number;
+}
+
+export interface Workflow {
+  id: number;
+  name: string;
+  description?: string;
+  graph_data: {
+    nodes: WorkflowNode[];
+    connections: WorkflowConnection[];
+  };
+  node_configs: Record<string, WorkflowNodeConfig>;
+  status: 'draft' | 'ready' | 'running' | 'completed' | 'failed';
+  canvas_state: { zoom: number; panX: number; panY: number };
+  tags: string[];
+  is_favorite: boolean;
+  last_run_at?: string;
+  last_run_results: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowRun {
+  id: number;
+  workflow_id?: number;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  input_graph: any;
+  results: Record<string, any>;
+  final_script?: string;
+  storyboard?: string;
+  total_credits_used: number;
+  metrics: {
+    total_nodes: number;
+    processed_nodes: number;
+    total_time_ms: number;
+    per_node_time: Record<string, number>;
+  };
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  node_count: number;
+  estimated_credits: number;
+  graph_data: {
+    nodes: WorkflowNode[];
+    connections: WorkflowConnection[];
+  };
+  node_configs: Record<string, WorkflowNodeConfig>;
+}
+
+export interface SavedVideo {
+  id: number;
+  platform: string;
+  author: string;
+  desc: string;
+  views: string;
+  uts: number;
+  thumb: string;
+  url?: string;
+}
+
+// Chat Session (database-backed)
+export interface ChatSessionType {
+  id: number;
+  session_id: string;
+  title: string;
+  model: string;
+  mode: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+  last_message?: string;
+}
+
+// Chat Credits
+export interface ChatCreditsInfo {
+  remaining: number;
+  cost: number;
+  monthly_limit: number;
+  tier: string;
+  model_costs?: Record<string, number>;
 }

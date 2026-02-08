@@ -20,10 +20,14 @@ from sqlalchemy import or_, delete
 from ..core.database import get_db
 from ..db.models import Trend, User, UserSearch, SearchMode as DBSearchMode
 from ..services.collector import TikTokCollector
+from ..services.instagram_collector import InstagramCollector
+from ..services.instagram_adapter import adapt_instagram_to_standard
+from ..services.instagram_profile_adapter import adapt_instagram_profile_to_posts
 from ..services.scorer import TrendScorer
 from ..services.ml_client import get_ml_client
 from ..services.clustering import cluster_trends_by_visuals
 from ..services.scheduler import scheduler, rescan_videos_task
+from ..services.storage import SupabaseStorage
 
 from .dependencies import (
     get_current_user,
@@ -47,7 +51,8 @@ from .schemas.trends import (
     HashtagInfo,
     UTSBreakdown,
     ClusterInfo,
-    SearchMode
+    SearchMode,
+    Platform
 )
 
 # Logger setup
@@ -67,6 +72,7 @@ def trend_to_dict(trend: Trend) -> dict:
         "trend_id": trend.id,  # Database ID for favorites
         "platform_id": trend.platform_id,
         "url": trend.url,
+        "play_addr": trend.play_addr,  # Direct CDN video playback URL
         "cover_url": trend.cover_url,
         "description": trend.description,
         "author_username": trend.author_username,
@@ -97,6 +103,14 @@ def parse_video_data(item: dict, idx: int = 0) -> dict:
         cover_url = item.get("coverUrl") or item.get("cover") or item.get("videoCover") or ""
     cover_url = cover_url.replace(".heic", ".jpeg").replace(".webp", ".jpeg") if cover_url else ""
 
+    # Upload thumbnail to Supabase Storage (images only, not videos)
+    if cover_url:
+        uploaded_cover = SupabaseStorage.upload_thumbnail(cover_url)
+        if uploaded_cover:
+            cover_url = uploaded_cover
+        else:
+            logger.warning(f"Failed to upload thumbnail for video {item.get('id')}, using original URL")
+
     # Video URL
     video_url = (
         item.get("webVideoUrl") or
@@ -106,8 +120,9 @@ def parse_video_data(item: dict, idx: int = 0) -> dict:
         f"https://www.tiktok.com/@{author_meta.get('uniqueId', 'user')}/video/{item.get('id', '')}"
     )
 
-    # Play address
+    # Play address (video.url is the main field for direct CDN playback)
     play_addr = (
+        v_meta.get("url") or
         v_meta.get("playAddr") or
         v_meta.get("downloadAddr") or
         item.get("videoUrl") or
@@ -380,12 +395,21 @@ def search_trends(
         )
 
     logger.info(
-        f"🔎 Search [{req.mode.value}]: {search_targets} "
+        f"🔎 Search [{req.mode.value}] on {req.platform.value.upper()}: {search_targets} "
         f"(Mode: {'DEEP' if req.is_deep else 'LIGHT'}, "
         f"User: {current_user.id}, Tier: {current_user.subscription_tier.value})"
     )
 
-    collector = TikTokCollector()
+    # Select collector based on platform
+    if req.platform == Platform.INSTAGRAM:
+        collector = InstagramCollector()
+        platform_name = "Instagram"
+    else:
+        collector = TikTokCollector()
+        platform_name = "TikTok"
+
+    logger.info(f"📱 Using {platform_name} collector")
+
     raw_items = []
     clean_items = []
 
@@ -431,6 +455,18 @@ def search_trends(
             log_search(db, current_user.id, search_targets[0], req.mode.value, False, 0, execution_time)
             return {"status": "empty", "items": []}
 
+        # Adapt Instagram data to standard format if needed
+        if req.platform == Platform.INSTAGRAM:
+            logger.info(f"📸 Adapting {len(raw_items)} Instagram profile(s) to posts...")
+            adapted_items = []
+            for profile in raw_items:
+                # New: Each item is a profile with latestPosts array
+                posts = adapt_instagram_profile_to_posts(profile)
+                if posts:
+                    adapted_items.extend(posts)  # Flatten posts from all profiles
+            raw_items = adapted_items
+            logger.info(f"✅ {len(raw_items)} Instagram videos after extraction")
+
         # Filter by minimum views
         for item in raw_items:
             v_count = int(item.get("views") or (item.get("stats") or {}).get("playCount") or 0)
@@ -448,6 +484,18 @@ def search_trends(
             execution_time = int((time.time() - start_time) * 1000)
             log_search(db, current_user.id, search_targets[0], req.mode.value, False, 0, execution_time)
             return {"status": "empty", "items": []}
+
+        # Adapt Instagram data if needed
+        if req.platform == Platform.INSTAGRAM:
+            logger.info(f"📸 Adapting {len(raw_items)} Instagram profile(s)...")
+            adapted_items = []
+            for profile in raw_items:
+                posts = adapt_instagram_profile_to_posts(profile)
+                if posts:
+                    adapted_items.extend(posts)
+            raw_items = adapted_items
+            logger.info(f"✅ {len(raw_items)} Instagram videos after extraction")
+
         clean_items = raw_items
 
     elif req.is_deep:
@@ -458,6 +506,17 @@ def search_trends(
             execution_time = int((time.time() - start_time) * 1000)
             log_search(db, current_user.id, search_targets[0], req.mode.value, True, 0, execution_time)
             return {"status": "empty", "items": []}
+
+        # Adapt Instagram data if needed
+        if req.platform == Platform.INSTAGRAM:
+            logger.info(f"📸 Adapting {len(raw_items)} Instagram profile(s) [DEEP]...")
+            adapted_items = []
+            for profile in raw_items:
+                posts = adapt_instagram_profile_to_posts(profile)
+                if posts:
+                    adapted_items.extend(posts)
+            raw_items = adapted_items
+            logger.info(f"✅ {len(raw_items)} Instagram videos after extraction")
 
         for item in raw_items:
             v_count = int(item.get("views") or (item.get("stats") or {}).get("playCount") or 0)
@@ -587,6 +646,7 @@ def search_trends(
                     user_id=current_user.id,  # USER ISOLATION
                     platform_id=p_id,
                     url=video_url,
+                    play_addr=parsed.get("play_addr"),  # Direct CDN video playback URL
                     cover_url=parsed["cover_url"],
                     description=parsed["description"],
                     stats=current_stats,

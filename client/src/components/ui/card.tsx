@@ -1,19 +1,48 @@
 import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
-  return (
+const cardVariants = cva(
+  "relative flex flex-col gap-6 rounded-2xl transition-all duration-300",
+  {
+    variants: {
+      variant: {
+        default:
+          "bg-card text-card-foreground border border-border/50 shadow-sm hover:shadow-md hover:border-border",
+        glass:
+          "glass-card text-card-foreground hover:border-white/20 hover:shadow-lg",
+        gradient:
+          "bg-gradient-to-br from-card to-muted border border-border/50 hover:shadow-lg hover:border-primary/20",
+        glow:
+          "bg-card text-card-foreground border border-primary/20 shadow-glow-sm hover:shadow-glow",
+        elevated:
+          "bg-card text-card-foreground border border-border/30 shadow-lg hover:shadow-xl hover:-translate-y-1",
+        flat:
+          "bg-secondary/50 text-secondary-foreground border-transparent",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
+
+export interface CardProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof cardVariants> {}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, variant, ...props }, ref) => (
     <div
+      ref={ref}
       data-slot="card"
-      className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
-        className
-      )}
+      className={cn(cardVariants({ variant, className }))}
       {...props}
     />
   )
-}
+)
+Card.displayName = "Card"
 
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -81,6 +110,26 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+// Gradient border card (Northern Lights style)
+const GradientCard = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, children, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "relative rounded-2xl p-[1px] bg-gradient-to-br from-nl-indigo via-nl-purple to-nl-pink",
+      className
+    )}
+    {...props}
+  >
+    <div className="relative h-full w-full rounded-2xl bg-card p-6">
+      {children}
+    </div>
+  </div>
+))
+GradientCard.displayName = "GradientCard"
+
 export {
   Card,
   CardHeader,
@@ -89,4 +138,6 @@ export {
   CardAction,
   CardDescription,
   CardContent,
+  GradientCard,
+  cardVariants,
 }

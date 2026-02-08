@@ -18,3 +18,8 @@ passlib[bcrypt]
 python-jose[cryptography]
 python-multipart
 alembic
+cryptography
+python-dateutil
+yt-dlp
+anthropic
+openai

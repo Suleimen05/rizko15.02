@@ -11,12 +11,12 @@ import {
   HelpCircle,
   ChevronUp,
   LogOut,
-  Rocket,
-  Store,
   Globe,
   ArrowUpCircle,
-  Info,
   ChevronRight,
+  Bookmark,
+  Video,
+  Sparkles,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -27,92 +27,61 @@ import {
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import { ComingSoonModal } from '@/components/ComingSoonModal';
-import { features, REVIEW_MODE } from '@/config/features';
-import { Video, Link as LinkIcon } from 'lucide-react';
+import { REVIEW_MODE } from '@/config/features';
 
 interface MobileSidebarProps {
   open: boolean;
   onClose: () => void;
 }
 
-// Dynamic navigation items based on REVIEW_MODE
-const getMainNavItems = () => {
-  const items = [
-    {
-      title: 'Dashboard',
-      href: '/dashboard',
-      icon: LayoutDashboard,
-      show: true,
-    },
-    {
-      title: 'My Videos',
-      href: '/dashboard/my-videos',
-      icon: Video,
-      show: features.myVideos,
-    },
-    {
-      title: 'Connect Accounts',
-      href: '/dashboard/connect-accounts',
-      icon: LinkIcon,
-      show: features.tiktokOAuth,
-    },
-    {
-      title: 'Trending Now',
-      href: '/dashboard/trending',
-      icon: TrendingUp,
-      badge: 'NEW',
-      badgeVariant: 'default' as const,
-      show: features.trending,
-    },
-    {
-      title: 'Discover Videos',
-      href: '/dashboard/discover',
-      icon: Search,
-      show: features.trendDiscovery,
-    },
-    {
-      title: 'Deep Analysis',
-      href: '/dashboard/analytics',
-      icon: BarChart3,
-      show: features.deepAnalysis,
-    },
-    {
-      title: 'Competitors',
-      href: '/dashboard/competitors',
-      icon: Users,
-      show: features.competitors,
-    },
-    {
-      title: 'Feedback',
-      href: '/dashboard/feedback',
-      icon: MessageSquare,
-      show: true,
-    },
-  ];
+interface NavItem {
+  title: string;
+  href: string;
+  icon: React.ElementType;
+  badge?: string;
+}
 
-  return items.filter(item => item.show);
-};
+// Main navigation items
+const mainNavItems: NavItem[] = [
+  {
+    title: 'Dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'My Posts',
+    href: '/dashboard/my-videos',
+    icon: Video,
+  },
+];
 
-// Dynamic coming soon items based on REVIEW_MODE
-const getComingSoonItems = () => {
-  if (REVIEW_MODE) return [];
+// Tools section
+const toolsNavItems: NavItem[] = REVIEW_MODE
+  ? [
+      { title: 'Trending Now', href: '/dashboard/trending', icon: TrendingUp, badge: 'NEW' },
+      { title: 'Discover Videos', href: '/dashboard/discover', icon: Search },
+      { title: 'Saved', href: '/dashboard/saved', icon: Bookmark },
+    ]
+  : [
+      { title: 'Trending Now', href: '/dashboard/trending', icon: TrendingUp, badge: 'NEW' },
+      { title: 'Discover Videos', href: '/dashboard/discover', icon: Search },
+      { title: 'Deep Analysis', href: '/dashboard/analytics', icon: BarChart3 },
+      { title: 'Saved', href: '/dashboard/saved', icon: Bookmark },
+      { title: 'Competitors', href: '/dashboard/competitors', icon: Users },
+    ];
 
-  return [
-    {
-      title: 'Publish Hub',
-      icon: Rocket,
-      badge: 'BETA',
-      modalType: 'publish' as const,
-    },
-    {
-      title: 'Marketplace',
-      icon: Store,
-      badge: 'BETA',
-      modalType: 'marketplace' as const,
-    },
-  ];
-};
+// AI Tools section (only outside Review Mode)
+const aiNavItems: NavItem[] = REVIEW_MODE
+  ? []
+  : [
+      { title: 'AI Scripts', href: '/dashboard/ai-scripts', icon: Sparkles, badge: 'AI' },
+    ];
+
+// Support items
+const supportNavItems: NavItem[] = [
+  { title: 'Feedback', href: '/dashboard/feedback', icon: MessageSquare },
+  { title: 'Help & FAQ', href: '/dashboard/help', icon: HelpCircle },
+];
 
 export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
   const location = useLocation();
@@ -120,15 +89,11 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
   const { user: authUser, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
-  const [showLearnMoreMenu, setShowLearnMoreMenu] = useState(false);
-  const [showPublishModal, setShowPublishModal] = useState(false);
-  const [showMarketplaceModal, setShowMarketplaceModal] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState('English');
 
   const user = {
     name: authUser?.name || 'Demo User',
-    email: authUser?.email || 'demo@trendscout.ai',
-    avatar: authUser?.avatar || null,
+    email: authUser?.email || 'demo@example.com',
     plan: authUser?.subscription || 'Free',
   };
 
@@ -143,220 +108,214 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
     onClose();
   };
 
+  // Check if route is active
+  const isActive = (href: string) => {
+    if (href === '/dashboard') {
+      return location.pathname === '/dashboard';
+    }
+    return location.pathname.startsWith(href);
+  };
+
+  const MobileNavItem = ({ item }: { item: NavItem }) => {
+    const Icon = item.icon;
+    const active = isActive(item.href);
+
+    return (
+      <NavLink
+        to={item.href}
+        onClick={handleNavClick}
+        className={cn(
+          'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 relative',
+          active
+            ? 'text-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        )}
+      >
+        {/* Active indicator bar */}
+        {active && (
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-full bg-gradient-to-b from-nl-indigo via-nl-purple to-nl-pink" />
+        )}
+
+        {/* Icon */}
+        <div className={cn(
+          'flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200',
+          active
+            ? 'bg-gradient-to-br from-nl-indigo/20 via-nl-purple/20 to-nl-pink/20 text-primary'
+            : 'text-muted-foreground group-hover:bg-secondary group-hover:text-foreground'
+        )}>
+          <Icon className="h-[18px] w-[18px]" strokeWidth={1.5} />
+        </div>
+
+        {/* Label */}
+        <span className="flex-1">{item.title}</span>
+
+        {/* Badge */}
+        {item.badge && (
+          <Badge
+            variant="outline"
+            className={cn(
+              'text-[10px] px-1.5 py-0 h-5 border-0 font-medium',
+              item.badge === 'AI'
+                ? 'bg-gradient-to-r from-nl-purple/20 to-nl-pink/20 text-primary'
+                : 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-400'
+            )}
+          >
+            {item.badge}
+          </Badge>
+        )}
+      </NavLink>
+    );
+  };
+
+  const MobileNavSection = ({ title, items }: { title: string; items: NavItem[] }) => (
+    <div className="space-y-1">
+      <p className="px-3 py-2 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">
+        {title}
+      </p>
+      <nav className="space-y-0.5">
+        {items.map((item) => (
+          <MobileNavItem key={item.href} item={item} />
+        ))}
+      </nav>
+    </div>
+  );
+
   return (
-    <>
-      <Sheet open={open} onOpenChange={onClose}>
-        <SheetContent side="left" className="w-72 p-0 flex flex-col bg-background border-r">
-          {/* Header */}
-          <SheetHeader className="p-4 border-b">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <img
-                  src="/logo192.png?v=3"
-                  alt="Rizko.ai"
-                  className="h-9 w-9 object-contain"
-                />
-                <SheetTitle className="font-semibold">Rizko.ai</SheetTitle>
-              </div>
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="left" className="w-72 p-0 flex flex-col bg-background/95 backdrop-blur-xl border-r border-border/50">
+        {/* Header */}
+        <SheetHeader className="p-4 border-b border-border/50">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-nl-indigo via-nl-purple to-nl-pink flex items-center justify-center shadow-glow-sm">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
-          </SheetHeader>
+            <SheetTitle className="text-lg font-bold gradient-text">Rizko.ai</SheetTitle>
+          </div>
+        </SheetHeader>
 
-          {/* Navigation */}
-          <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
-            {getMainNavItems().map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.href;
-
-              return (
-                <NavLink
-                  key={item.href}
-                  to={item.href}
-                  onClick={handleNavClick}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
-                    isActive
-                      ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                  )}
-                >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
-                  <span className="flex-1">{item.title}</span>
-                  {item.badge && (
-                    <Badge
-                      variant={item.badgeVariant}
-                      className={cn(
-                        'ml-auto text-[10px] px-1.5 py-0',
-                        item.badge === 'NEW' && 'bg-green-500/10 text-green-600 border-green-500/20',
-                        item.badge === 'PRO' && 'bg-purple-500/10 text-purple-600 border-purple-500/20'
-                      )}
-                    >
-                      {item.badge}
-                    </Badge>
-                  )}
-                </NavLink>
-              );
-            })}
-
-            {/* Coming Soon Items - Hidden in REVIEW_MODE */}
-            {getComingSoonItems().map((item) => {
-              const Icon = item.icon;
-              const handleClick = () => {
-                if (item.modalType === 'publish') {
-                  setShowPublishModal(true);
-                } else if (item.modalType === 'marketplace') {
-                  setShowMarketplaceModal(true);
-                }
-              };
-
-              return (
-                <button
-                  key={item.title}
-                  onClick={handleClick}
-                  className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all text-muted-foreground hover:text-foreground hover:bg-accent"
-                >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
-                  <span className="flex-1 text-left">{item.title}</span>
-                  <Badge
-                    variant="secondary"
-                    className="ml-auto text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 border-blue-500/20"
-                  >
-                    {item.badge}
-                  </Badge>
-                </button>
-              );
-            })}
+        {/* Navigation */}
+        <div className="flex-1 overflow-y-auto py-4 px-2 space-y-6">
+          {/* Main */}
+          <nav className="space-y-0.5">
+            {mainNavItems.map((item) => (
+              <MobileNavItem key={item.href} item={item} />
+            ))}
           </nav>
 
-          {/* User Section */}
-          <div className="border-t p-3">
-            <button
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-all"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white font-medium text-sm">
-                {user.name.split(' ').map(n => n[0]).join('')}
-              </div>
-              <div className="flex-1 text-left overflow-hidden">
-                <p className="font-medium text-foreground truncate">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.plan} plan</p>
-              </div>
-              <ChevronUp className={cn('h-4 w-4 text-muted-foreground transition-transform', showUserMenu && 'rotate-180')} />
-            </button>
+          {/* Tools */}
+          <MobileNavSection title="Tools" items={toolsNavItems} />
 
-            {/* User Menu */}
-            {showUserMenu && (
-              <div className="mt-2 bg-accent/50 rounded-lg py-1">
-                <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border/50">
-                  {user.email}
+          {/* AI Tools */}
+          {aiNavItems.length > 0 && (
+            <MobileNavSection title="AI Tools" items={aiNavItems} />
+          )}
+
+          {/* Support */}
+          <MobileNavSection title="Support" items={supportNavItems} />
+        </div>
+
+        {/* User Section */}
+        <div className="border-t border-border/50 p-3">
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className={cn(
+              'w-full flex items-center gap-3 p-2 rounded-xl transition-all duration-200',
+              showUserMenu ? 'bg-secondary' : 'hover:bg-secondary/50'
+            )}
+          >
+            {/* Avatar */}
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-nl-indigo to-nl-purple text-white font-medium text-sm">
+              {user.name.split(' ').map(n => n[0]).join('')}
+            </div>
+            <div className="flex-1 text-left overflow-hidden">
+              <p className="font-medium text-sm text-foreground truncate">{user.name}</p>
+              <p className="text-xs text-muted-foreground capitalize">{user.plan} Plan</p>
+            </div>
+            <ChevronUp className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200', showUserMenu && 'rotate-180')} />
+          </button>
+
+          {/* User Menu */}
+          {showUserMenu && (
+            <div className="mt-2 glass-card py-2 rounded-xl">
+              <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border/30 mb-1">
+                {user.email}
+              </div>
+
+              {/* Settings */}
+              <NavLink
+                to="/dashboard/settings"
+                className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-secondary/50 transition-all rounded-lg mx-1"
+                onClick={handleNavClick}
+              >
+                <Settings className="h-4 w-4 text-muted-foreground" />
+                <span>Settings</span>
+              </NavLink>
+
+              {/* Language */}
+              <button
+                className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-secondary/50 transition-all rounded-lg mx-1"
+                onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+              >
+                <div className="flex items-center gap-3">
+                  <Globe className="h-4 w-4 text-muted-foreground" />
+                  <span>Language</span>
                 </div>
+                <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', showLanguageMenu && 'rotate-90')} />
+              </button>
 
-                <NavLink
-                  to="/dashboard/settings"
-                  className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-accent transition-all"
-                  onClick={handleNavClick}
-                >
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                  <span>Settings</span>
-                </NavLink>
+              {showLanguageMenu && (
+                <div className="ml-6 py-1">
+                  {[
+                    { key: 'English', label: 'English' },
+                    { key: 'Russian', label: 'Русский' },
+                    { key: 'Spanish', label: 'Español' },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/50 transition-all rounded-lg",
+                        currentLanguage === key && "text-purple-500"
+                      )}
+                      onClick={() => {
+                        setCurrentLanguage(key);
+                        setShowLanguageMenu(false);
+                      }}
+                    >
+                      {currentLanguage === key && <span className="text-purple-500">•</span>}
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
-                <button
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent transition-all"
-                  onClick={() => setShowLanguageMenu(!showLanguageMenu)}
-                >
-                  <div className="flex items-center gap-3">
-                    <Globe className="h-4 w-4 text-muted-foreground" />
-                    <span>Language</span>
-                  </div>
-                  <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', showLanguageMenu && 'rotate-90')} />
-                </button>
+              <div className="border-t border-border/30 my-1" />
 
-                {showLanguageMenu && (
-                  <div className="ml-6 py-1">
-                    {['English', 'Russian', 'Spanish'].map((lang) => (
-                      <button
-                        key={lang}
-                        className={cn(
-                          "w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-all",
-                          currentLanguage === lang && "text-purple-500"
-                        )}
-                        onClick={() => {
-                          setCurrentLanguage(lang);
-                          setShowLanguageMenu(false);
-                        }}
-                      >
-                        {currentLanguage === lang && <span className="text-purple-500">•</span>}
-                        <span>{lang === 'Russian' ? 'Русский' : lang === 'Spanish' ? 'Español' : lang}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <NavLink
-                  to="/dashboard/help"
-                  className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-accent transition-all"
-                  onClick={handleNavClick}
-                >
-                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                  <span>Get help</span>
-                </NavLink>
-
-                <div className="border-t border-border/50 my-1" />
-
+              {/* Upgrade Plan */}
+              {!REVIEW_MODE && (
                 <NavLink
                   to="/dashboard/pricing"
-                  className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-accent transition-all"
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-secondary/50 transition-all rounded-lg mx-1"
                   onClick={handleNavClick}
                 >
                   <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
-                  <span>Upgrade plan</span>
+                  <span>Upgrade Plan</span>
                 </NavLink>
+              )}
 
-                <button
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent transition-all"
-                  onClick={() => setShowLearnMoreMenu(!showLearnMoreMenu)}
-                >
-                  <div className="flex items-center gap-3">
-                    <Info className="h-4 w-4 text-muted-foreground" />
-                    <span>Learn more</span>
-                  </div>
-                  <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', showLearnMoreMenu && 'rotate-90')} />
-                </button>
+              <div className="border-t border-border/30 my-1" />
 
-                {showLearnMoreMenu && (
-                  <div className="ml-6 py-1">
-                    <NavLink to="/about" className="block px-3 py-1.5 text-sm hover:bg-accent" onClick={handleNavClick}>About</NavLink>
-                    <NavLink to="/usage-policy" className="block px-3 py-1.5 text-sm hover:bg-accent" onClick={handleNavClick}>Usage policy</NavLink>
-                    <NavLink to="/privacy-policy" className="block px-3 py-1.5 text-sm hover:bg-accent" onClick={handleNavClick}>Privacy policy</NavLink>
-                    <button className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent" onClick={handleNavClick}>Your privacy choices</button>
-                  </div>
-                )}
-
-                <div className="border-t border-border/50 my-1" />
-
-                <button
-                  className="w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-accent transition-all text-muted-foreground"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Log out</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Coming Soon Modals */}
-      <ComingSoonModal
-        isOpen={showPublishModal}
-        onClose={() => setShowPublishModal(false)}
-        type="publish"
-      />
-      <ComingSoonModal
-        isOpen={showMarketplaceModal}
-        onClose={() => setShowMarketplaceModal(false)}
-        type="marketplace"
-      />
-    </>
+              {/* Logout */}
+              <button
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-destructive/10 transition-all rounded-lg mx-1 text-muted-foreground hover:text-destructive"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Log out</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

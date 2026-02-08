@@ -22,6 +22,12 @@ class SearchMode(str, Enum):
     USERNAME = "username"
 
 
+class Platform(str, Enum):
+    """Supported social media platforms."""
+    TIKTOK = "tiktok"
+    INSTAGRAM = "instagram"
+
+
 class SubscriptionTier(str, Enum):
     """User subscription tiers."""
     FREE = "free"
@@ -40,6 +46,7 @@ class SearchRequest(BaseModel):
 
     Supports both keyword search and username profile analysis.
     Deep Analyze requires Pro/Agency tier.
+    Multi-platform support: TikTok and Instagram.
     """
     target: Optional[str] = Field(
         None,
@@ -54,6 +61,10 @@ class SearchRequest(BaseModel):
     mode: SearchMode = Field(
         default=SearchMode.KEYWORDS,
         description="Search mode: keywords or username"
+    )
+    platform: Platform = Field(
+        default=Platform.TIKTOK,
+        description="Platform to search: tiktok or instagram"
     )
     business_desc: Optional[str] = Field(
         default="",

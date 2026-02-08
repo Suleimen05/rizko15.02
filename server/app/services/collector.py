@@ -83,7 +83,27 @@ class TikTokCollector:
             dataset = self.client.dataset(run["defaultDatasetId"])
             raw_items = list(dataset.iterate_items())
             print(f"📦 Apidojo: получено {len(raw_items)} сырых записей.")
-            
+
+            # DEBUG: Print first item structure
+            if raw_items:
+                import json
+                first = raw_items[0]
+                print("🔍 DEBUG: First item keys:", list(first.keys())[:20])
+                if 'video' in first:
+                    print("🔍 DEBUG: video keys:", list(first['video'].keys())[:20] if isinstance(first['video'], dict) else 'not a dict')
+                if 'videoMeta' in first:
+                    print("🔍 DEBUG: videoMeta keys:", list(first['videoMeta'].keys())[:20] if isinstance(first['videoMeta'], dict) else 'not a dict')
+                # Check for cover in different places
+                cover_found = []
+                for key in ['cover', 'coverUrl', 'cover_url', 'videoCover', 'dynamicCover']:
+                    if key in first:
+                        cover_found.append(f"{key}={first[key][:50] if first[key] else 'null'}")
+                if first.get('video'):
+                    for key in ['cover', 'coverUrl', 'dynamicCover', 'originCover']:
+                        if key in first.get('video', {}):
+                            cover_found.append(f"video.{key}={first['video'][key][:50] if first['video'][key] else 'null'}")
+                print(f"🔍 DEBUG: Cover fields found: {cover_found if cover_found else 'NONE!'}")
+
             return raw_items
 
         except Exception as exc:

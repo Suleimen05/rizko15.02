@@ -15,7 +15,8 @@ import { cn } from '@/lib/utils';
 import { useSearchWithFilters } from '@/hooks/useTikTok';
 import { useAIScriptGenerator } from '@/hooks/useTikTok';
 import { useAuth } from '@/contexts/AuthContext';
-import type { TikTokVideo, SearchFilters, AnalysisMode } from '@/types';
+import type { TikTokVideo, SearchFilters, AnalysisMode, Platform } from '@/types';
+import { getEnabledPlatforms, getPlatform } from '@/constants/platforms';
 
 export function Discover() {
   const { user } = useAuth();
@@ -24,7 +25,11 @@ export function Discover() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<TikTokVideo | null>(null);
   const [showAIScript, setShowAIScript] = useState(false);
-  
+
+  // Platform Selection (TikTok, Instagram, etc.)
+  const [platform, setPlatform] = useState<Platform>('tiktok');
+  const enabledPlatforms = getEnabledPlatforms();
+
   // Analysis Mode (Light vs Deep)
   const [analyzeMode, setAnalyzeMode] = useState<AnalysisMode>('light');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -65,12 +70,21 @@ export function Discover() {
         console.error('Failed to parse search history:', e);
       }
     }
-    
+
     const savedVideos = localStorage.getItem('trendscout_recent_videos');
     if (savedVideos) {
       try {
         const parsed = JSON.parse(savedVideos);
-        setRecentVideos(parsed.slice(0, 6)); // Keep last 6 videos for performance
+        // Filter out old videos without play_addr (from before the fix)
+        const validVideos = parsed.filter((v: any) => v.play_addr || v.video?.playAddr);
+
+        if (validVideos.length !== parsed.length) {
+          console.log(`🧹 Cleaned ${parsed.length - validVideos.length} old recent videos without play_addr`);
+          // Save cleaned list back to localStorage
+          localStorage.setItem('trendscout_recent_videos', JSON.stringify(validVideos));
+        }
+
+        setRecentVideos(validVideos.slice(0, 6)); // Keep last 6 videos for performance
       } catch (e) {
         console.error('Failed to parse recent videos:', e);
       }
@@ -107,11 +121,16 @@ export function Discover() {
         description: v.description?.slice(0, 200), // Truncate description
         author: { uniqueId: v.author.uniqueId, nickname: v.author.nickname, avatar: v.author.avatar },
         stats: v.stats,
-        video: { cover: v.video.cover, duration: v.video.duration },
+        video: {
+          cover: v.video.cover,
+          duration: v.video.duration,
+          playAddr: v.video.playAddr,  // Direct CDN URL for HTML5 video player
+        },
         viralScore: v.viralScore,
         uts_score: v.uts_score,
         engagementRate: v.engagementRate,
         cover_url: v.cover_url,
+        play_addr: v.play_addr || v.video?.playAddr || '',  // Also save on top level for VideoCard
       }));
       
       // Merge with existing, remove duplicates
@@ -135,6 +154,7 @@ export function Discover() {
   const { videos, loading, refetch } = useSearchWithFilters({
     ...filters,
     niche: searchQuery || searchKeyword,
+    platform: platform,  // Multi-platform support
     is_deep: analyzeMode === 'deep',
     user_tier: userTier,
   });
@@ -157,6 +177,14 @@ export function Discover() {
     if (filters.maxDuration) newParams.set('maxDuration', filters.maxDuration.toString());
     setSearchParams(newParams);
   }, [searchQuery, filters, setSearchParams]);
+
+  // Re-run search when platform changes (if search was already performed)
+  useEffect(() => {
+    if (searchKeyword) {
+      // User already searched, re-fetch with new platform
+      refetch(searchKeyword);
+    }
+  }, [platform]); // Only re-run when platform changes
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -297,6 +325,35 @@ export function Discover() {
           )}
         </Button>
       </div>
+
+      {/* Platform Selector */}
+      <Card className="border-2">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Search className="h-5 w-5" />
+            Platform
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-3">
+            {enabledPlatforms.map((p) => (
+              <Button
+                key={p.id}
+                variant={platform === p.id ? 'default' : 'outline'}
+                size="lg"
+                className={cn(
+                  "h-auto py-4 flex flex-col items-center gap-2 transition-all",
+                  platform === p.id && `bg-gradient-to-r ${p.color} text-white border-0 shadow-lg`
+                )}
+                onClick={() => setPlatform(p.id)}
+              >
+                <span className="text-2xl">{p.icon}</span>
+                <span className="font-semibold">{p.name}</span>
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Analysis Mode Selector */}
       <Card className="border-2">
@@ -512,9 +569,17 @@ export function Discover() {
 
       {/* Results Header */}
       <div className="flex items-center justify-between">
-        <p className="text-muted-foreground">
-          {loading ? 'Loading...' : `${videos.length} videos found`}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-muted-foreground">
+            {loading ? 'Loading...' : `${videos.length} videos found`}
+          </p>
+          {!loading && videos.length > 0 && (
+            <Badge variant="outline" className="flex items-center gap-1">
+              <span>{getPlatform(platform).icon}</span>
+              {getPlatform(platform).name}
+            </Badge>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Sort:</span>
           <Badge variant="secondary">

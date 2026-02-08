@@ -258,6 +258,7 @@ export function useSearchWithFilters(filters: SearchFilters & {
       const result = await apiService.searchTrends({
         target: searchTerm,
         mode: 'keywords',
+        platform: filters.platform || 'tiktok',  // Multi-platform support
         is_deep: filters.is_deep || false,
         user_tier: filters.user_tier || 'pro',
       });
@@ -294,7 +295,7 @@ export function useSearchWithFilters(filters: SearchFilters & {
           duration: 0,
           ratio: '9:16',
           cover: trend.cover_url || '',
-          playAddr: trend.url || '',
+          playAddr: trend.play_addr || '',
           downloadAddr: '',
         },
         music: {
@@ -359,7 +360,7 @@ export function useSearchWithFilters(filters: SearchFilters & {
     } finally {
       setLoading(false);
     }
-  }, [filters.niche, filters.sortBy, filters.dateRange, filters.minViews, filters.maxViews, filters.minDuration, filters.maxDuration, filters.is_deep, filters.user_tier]);
+  }, [filters.niche, filters.sortBy, filters.dateRange, filters.minViews, filters.maxViews, filters.minDuration, filters.maxDuration, filters.is_deep, filters.user_tier, filters.platform]);
 
   // REMOVED auto-search on mount to prevent infinite loop
   // Users must click "Search" or "Apply Filters" button

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Bookmark, Search, Trash2, Tag, ExternalLink, Eye, Heart, Share2, TrendingUp, Loader2, FolderOpen } from 'lucide-react';
+import { Bookmark, Search, Tag, Loader2, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Select,
@@ -22,9 +21,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { apiService } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { VideoCard } from '@/components/VideoCard';
+import type { TikTokVideo } from '@/types';
 
 interface SavedTrend {
   id: number;
@@ -36,6 +36,7 @@ interface SavedTrend {
     id: number;
     platform_id: string;
     url: string;
+    play_addr?: string;  // Direct CDN video URL
     description: string;
     cover_url: string;
     author_username: string;
@@ -124,17 +125,52 @@ export function Saved() {
     }
   };
 
-  const formatNumber = (num: number): string => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'from-red-500 to-orange-500';
-    if (score >= 60) return 'from-yellow-500 to-orange-500';
-    if (score >= 40) return 'from-blue-500 to-purple-500';
-    return 'from-gray-400 to-gray-500';
+  // Convert SavedTrend to TikTokVideo format for VideoCard
+  const convertToTikTokVideo = (savedTrend: SavedTrend): TikTokVideo => {
+    return {
+      id: savedTrend.trend.platform_id,
+      trend_id: savedTrend.trend_id,
+      title: savedTrend.trend.description || '',
+      description: savedTrend.trend.description || '',
+      author: {
+        id: savedTrend.trend.author_username || '',
+        uniqueId: savedTrend.trend.author_username || '',
+        nickname: savedTrend.trend.author_username || '',
+        avatar: '',
+        followerCount: 0,
+        followingCount: 0,
+        heartCount: 0,
+        videoCount: 0,
+        verified: false,
+      },
+      stats: {
+        playCount: savedTrend.trend.stats?.playCount || 0,
+        diggCount: savedTrend.trend.stats?.diggCount || 0,
+        shareCount: savedTrend.trend.stats?.shareCount || 0,
+        commentCount: savedTrend.trend.stats?.commentCount || 0,
+      },
+      video: {
+        duration: 0,
+        ratio: '9:16',
+        cover: savedTrend.trend.cover_url || '',
+        playAddr: savedTrend.trend.play_addr || '',  // Direct CDN URL for inline playback
+        downloadAddr: '',
+      },
+      music: {
+        id: '',
+        title: '',
+        authorName: '',
+        original: false,
+        playUrl: '',
+      },
+      hashtags: [],
+      createdAt: savedTrend.created_at,
+      uts_score: savedTrend.trend.uts_score,
+      cover_url: savedTrend.trend.cover_url,
+      url: savedTrend.trend.url,
+      play_addr: savedTrend.trend.play_addr,  // Also on top level for VideoCard
+      author_username: savedTrend.trend.author_username,
+    };
   };
 
   const filteredFavorites = favorites.filter(fav => {
@@ -208,137 +244,16 @@ export function Saved() {
         </Card>
       ) : (
         <>
-          {/* Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {/* Grid - Using VideoCard like Discover and Competitors */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filteredFavorites.map((favorite) => (
-              <Card
+              <VideoCard
                 key={favorite.id}
-                className="group relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
-              >
-                {/* Thumbnail */}
-                <div className="relative aspect-[9/16] overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900">
-                  {favorite.trend.cover_url ? (
-                    <img
-                      src={favorite.trend.cover_url}
-                      alt={favorite.trend.description}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/placeholder-video.svg';
-                      }}
-                    />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center text-gray-500">
-                      <Bookmark className="h-16 w-16" />
-                    </div>
-                  )}
-
-                  {/* Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
-
-                  {/* UTS Score */}
-                  {favorite.trend.uts_score > 0 && (
-                    <Badge
-                      className={cn(
-                        "absolute top-2 left-2 text-white border-0 font-bold",
-                        `bg-gradient-to-r ${getScoreColor(favorite.trend.uts_score)}`
-                      )}
-                    >
-                      <TrendingUp className="h-3 w-3 mr-1" />
-                      {favorite.trend.uts_score.toFixed(0)}
-                    </Badge>
-                  )}
-
-                  {/* Actions */}
-                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(favorite.trend.url, '_blank');
-                      }}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 bg-black/50 hover:bg-red-500/70 text-white"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteId(favorite.id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  {/* Tags */}
-                  {favorite.tags.length > 0 && (
-                    <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1">
-                      {favorite.tags.slice(0, 2).map(tag => (
-                        <Badge
-                          key={tag}
-                          variant="secondary"
-                          className="text-xs bg-white/20 text-white backdrop-blur-sm"
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
-                      {favorite.tags.length > 2 && (
-                        <Badge
-                          variant="secondary"
-                          className="text-xs bg-white/20 text-white backdrop-blur-sm"
-                        >
-                          +{favorite.tags.length - 2}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Content */}
-                <CardContent className="p-3 space-y-2">
-                  {/* Author */}
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-xs">
-                      {favorite.trend.author_username?.charAt(0).toUpperCase() || '?'}
-                    </div>
-                    <span className="text-sm font-medium truncate">
-                      @{favorite.trend.author_username || 'unknown'}
-                    </span>
-                  </div>
-
-                  {/* Description */}
-                  <p className="text-xs text-muted-foreground line-clamp-2">
-                    {favorite.trend.description || 'No description'}
-                  </p>
-
-                  {/* Stats */}
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1 border-t">
-                    <span className="flex items-center gap-1">
-                      <Eye className="h-3 w-3" />
-                      {formatNumber(favorite.trend.stats?.playCount || 0)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Heart className="h-3 w-3" />
-                      {formatNumber(favorite.trend.stats?.diggCount || 0)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Share2 className="h-3 w-3" />
-                      {formatNumber(favorite.trend.stats?.shareCount || 0)}
-                    </span>
-                  </div>
-
-                  {/* Notes */}
-                  {favorite.notes && (
-                    <p className="text-xs text-purple-600 dark:text-purple-400 italic truncate">
-                      Note: {favorite.notes}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+                video={convertToTikTokVideo(favorite)}
+                mode="light"
+                showStats
+                size="medium"
+              />
             ))}
           </div>
 
