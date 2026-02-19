@@ -40,6 +40,7 @@ def get_favorites(
     page: int = 1,
     per_page: int = 20,
     tag: Optional[str] = None,
+    project_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -55,6 +56,10 @@ def get_favorites(
     # Filter by tag if provided
     if tag:
         query = query.filter(UserFavorite.tags.contains([tag.lower()]))
+
+    # Filter by project if provided
+    if project_id is not None:
+        query = query.filter(UserFavorite.project_id == project_id)
 
     total = query.count()
     offset = (page - 1) * per_page
@@ -85,6 +90,7 @@ def get_favorites(
             trend_id=fav.trend_id,
             notes=fav.notes,
             tags=fav.tags or [],
+            project_id=fav.project_id,
             created_at=fav.created_at,
             trend=trend_summary
         ))
@@ -136,7 +142,8 @@ def add_favorite(
         user_id=current_user.id,
         trend_id=data.trend_id,
         notes=data.notes,
-        tags=data.tags or []
+        tags=data.tags or [],
+        project_id=data.project_id
     )
 
     db.add(favorite)
@@ -459,6 +466,7 @@ class SaveVideoRequest(BaseModel):
     viral_score: float = 0.0
     notes: Optional[str] = None
     tags: Optional[List[str]] = None
+    project_id: Optional[int] = None
 
 
 @router.post("/save-video", status_code=status.HTTP_201_CREATED)
@@ -527,7 +535,8 @@ def save_video_to_favorites(
             user_id=current_user.id,
             trend_id=trend.id,
             notes=data.notes,
-            tags=data.tags or []
+            tags=data.tags or [],
+            project_id=data.project_id
         )
         db.add(favorite)
         db.commit()

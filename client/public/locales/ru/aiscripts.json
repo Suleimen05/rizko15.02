@@ -1,35 +1,25 @@
 {
-  "pageTitle": "AI-сценарии",
-  "pageDescription": "Сгенерированные вирусные сценарии и идеи для контента",
-  "generateNewScript": "Создать сценарий",
-  "generateScript": "Создать сценарий",
-
-  "statsTotal": "Всего сценариев",
-  "statsFavorites": "Избранное",
-  "statsUsedThisWeek": "Использовано за неделю",
-  "statsAvgDuration": "Средняя длительность (с)",
-
-  "nichesAll": "Все сценарии",
-  "nichesEntertainment": "Развлечения",
-  "nichesEducation": "Образование",
-  "nichesLifestyle": "Лайфстайл",
-  "nichesBusiness": "Бизнес",
-
-  "emptyTitle": "Сценариев пока нет",
-  "emptyDescription": "Создайте свой первый AI-сценарий на основе трендового видео",
-
-  "previewTitle": "Предпросмотр сценария",
-  "previewPlaceholder": "Выберите сценарий для просмотра",
-  "hookLabel": "Хук (первые 3 секунды)",
-  "bodyLabel": "Основная часть",
-  "ctaLabel": "Призыв к действию",
-  "tipsLabel": "Советы",
+  "pageTitle": "AI Анализ видео",
+  "pageDescription": "AI-анализ видео с помощью Gemini Vision",
 
   "copied": "Скопировано!",
   "copy": "Копировать",
 
-  "timeAgoSeconds": "{{count}} с назад",
-  "timeAgoMinutes": "{{count}} мин назад",
-  "timeAgoHours": "{{count}} ч назад",
-  "timeAgoDays": "{{count}} дн назад"
+  "analysis": {
+    "title": "AI Анализ видео",
+    "subtitle": "Глубокий анализ с помощью Google Gemini Vision",
+    "credits": "кредитов",
+    "emptyDescription": "Откройте любое видео и нажмите «AI Анализ» для получения детальных AI-инсайтов",
+    "goToDiscover": "Перейти в Поиск",
+    "analyzing": "Анализируем видео...",
+    "analyzingDesc": "Gemini Vision загружает, просматривает и глубоко анализирует контент видео — визуал, аудио, хуки, темп и вирусные механики.",
+    "analyzingWait": "Это может занять до 2 минут",
+    "resultTitle": "Анализ завершён",
+    "download": "Скачать",
+    "reanalyze": "Повторить анализ",
+    "errorTitle": "Ошибка анализа",
+    "error": "Что-то пошло не так. Попробуйте ещё раз.",
+    "insufficientCredits": "Недостаточно кредитов. Анализ видео стоит 3 кредита.",
+    "retry": "Попробовать снова"
+  }
 }

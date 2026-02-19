@@ -1,33 +1,42 @@
 {
-  "title": "AI Creator",
+  "title": "AI Chat",
   "welcome": "What would you like to create?",
   "welcomeSubtitle": "Choose a quick action or start typing your own prompt",
   "quickActions": {
     "scriptGenerator": { "title": "Script Generator", "description": "Create viral video script" },
     "contentIdeas": { "title": "Content Ideas", "description": "Get 10 video ideas" },
     "trendAnalysis": { "title": "Trend Analysis", "description": "Analyze trending topic" },
-    "improveScript": { "title": "Improve Script", "description": "Make your script better" }
+    "improveScript": { "title": "Improve Script", "description": "Make your script better" },
+    "hookCreator": { "title": "Hook Creator", "description": "Scroll-stopping openers" },
+    "freeChat": { "title": "Free Chat", "description": "Ask anything about content" }
   },
   "prompts": {
     "scriptGenerator": "Create a viral TikTok script about ",
     "contentIdeas": "Generate 10 viral content ideas for ",
     "trendAnalysis": "Analyze the current trends in ",
-    "improveScript": "Improve this script and make it more viral: "
+    "improveScript": "Improve this script and make it more viral: ",
+    "hookCreator": "Create 5 scroll-stopping hooks for a video about ",
+    "freeChat": ""
   },
-  "popularPrompts": {
-    "title": "Popular Prompts",
-    "items": [
-      "Create TikTok script about productivity hacks",
-      "Analyze @garyvee's content strategy",
-      "Generate 10 video ideas for fitness niche",
-      "Write Instagram Reels hook for beauty product",
-      "Improve my script's engagement"
-    ]
+  "sidebar": {
+    "newChat": "New Chat",
+    "pinned": "Pinned",
+    "recent": "Recent",
+    "noSessions": "No conversations yet",
+    "messages": "msgs",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysAgo": "{{count}}d ago",
+    "rename": "Rename",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "delete": "Delete",
+    "openSidebar": "Open sidebar"
   },
   "chat": {
     "copy": "Copy",
     "save": "Save",
-    "placeholder": "Create script, # for trends, / for templates",
+    "placeholder": "Ask me anything about content creation...",
     "models": "Models",
     "mode": "Mode",
     "soon": "Soon",
@@ -35,12 +44,29 @@
     "attachFile": "Attach file",
     "voiceInput": "Voice input",
     "sendMessage": "Send message",
+    "stop": "Stop generation",
     "errorMessage": "Sorry, there was an error connecting to the AI. Please try again.",
     "imageGen": "Image",
     "expand": "View full size",
     "download": "Download image",
     "zoomIn": "Zoom in",
-    "zoomOut": "Zoom out"
+    "zoomOut": "Zoom out",
+    "pasteLinkPlaceholder": "Paste TikTok or Instagram video URL...",
+    "linkParsed": "Video info attached",
+    "linkError": "Failed to parse link. Check the URL.",
+    "voiceNotSupported": "Voice input is not supported in this browser",
+    "savedVideos": "Saved videos",
+    "savedVideosTitle": "Attach saved video",
+    "noSavedVideos": "No saved videos yet",
+    "noDescription": "No description",
+    "videoAttached": "Video attached as context",
+    "visionDesc": "Gemini watches the video",
+    "visionCredits": "3+ credits",
+    "textCredits": "1 credit",
+    "visionAnalyzing": "Analyzing video with AI Vision...",
+    "visionComplete": "Vision analysis complete ({{credits}} credits)",
+    "visionNoCredits": "Not enough credits for AI Vision (3 required)",
+    "visionError": "AI Vision analysis failed. Try again."
   },
   "modes": {
     "chat": "Chat",

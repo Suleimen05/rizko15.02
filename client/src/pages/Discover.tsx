@@ -10,13 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { VideoCard } from '@/components/VideoCard';
-import { AIScriptGenerator } from '@/components/AIScriptGenerator';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { DeepAnalyzeProgress } from '@/components/DeepAnalyzeProgress';
 import { cn } from '@/lib/utils';
 import { useSearchWithFilters } from '@/hooks/useTikTok';
-import { useAIScriptGenerator } from '@/hooks/useTikTok';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProject } from '@/contexts/ProjectContext';
 import type { TikTokVideo, SearchFilters, AnalysisMode, Platform } from '@/types';
 import { getEnabledPlatforms, getPlatform } from '@/constants/platforms';
 
@@ -37,12 +36,10 @@ const getDateRangeOptions = (t: TFunction) => [
 export function Discover() {
   const { t } = useTranslation('discover');
   const { user } = useAuth();
+  const { activeProject } = useProject();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedVideo, setSelectedVideo] = useState<TikTokVideo | null>(null);
-  const [showAIScript, setShowAIScript] = useState(false);
-
   // Platform Selection (TikTok, Instagram, etc.)
   const [platform, setPlatform] = useState<Platform>('tiktok');
   const enabledPlatforms = getEnabledPlatforms();
@@ -174,13 +171,8 @@ export function Discover() {
     platform: platform,  // Multi-platform support
     is_deep: analyzeMode === 'deep',
     user_tier: userTier,
+    ...(activeProject?.id && { project_id: activeProject.id }),
   });
-
-  const {
-    script,
-    loading: scriptLoading,
-    generate,
-  } = useAIScriptGenerator();
 
   // Update URL params when filters change
   useEffect(() => {
@@ -257,40 +249,6 @@ export function Discover() {
       return;
     }
     setAnalyzeMode(mode);
-  };
-
-  const handleGenerateScript = async (video: TikTokVideo) => {
-    setSelectedVideo(video);
-    setShowAIScript(true);
-    await generate(
-      video.description || video.title || '',
-      {
-        playCount: video.stats.playCount,
-        diggCount: video.stats.diggCount,
-        commentCount: video.stats.commentCount,
-        shareCount: video.stats.shareCount,
-      },
-      'engaging',
-      'general',
-      Math.floor((video.video?.duration || 30000) / 1000)
-    );
-  };
-
-  const handleRegenerateScript = async () => {
-    if (selectedVideo) {
-      await generate(
-        selectedVideo.description || selectedVideo.title || '',
-        {
-          playCount: selectedVideo.stats.playCount,
-          diggCount: selectedVideo.stats.diggCount,
-          commentCount: selectedVideo.stats.commentCount,
-          shareCount: selectedVideo.stats.shareCount,
-        },
-        'engaging',
-        'general',
-        Math.floor((selectedVideo.video?.duration || 30000) / 1000)
-      );
-    }
   };
 
   const sortOptions = getSortOptions(t);
@@ -557,21 +515,6 @@ export function Discover() {
         </Card>
       )}
 
-      {/* AI Script Generator */}
-      {showAIScript && (
-        <AIScriptGenerator
-          video={selectedVideo}
-          script={script}
-          loading={scriptLoading}
-          onGenerate={async () => {
-            if (selectedVideo) {
-              await handleGenerateScript(selectedVideo);
-            }
-          }}
-          onRegenerate={handleRegenerateScript}
-        />
-      )}
-
       {/* Results Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -629,7 +572,6 @@ export function Discover() {
                     key={video.id}
                     video={video}
                     mode={analyzeMode}
-                    onGenerateScript={handleGenerateScript}
                     showStats
                     size="medium"
                   />
@@ -719,7 +661,6 @@ export function Discover() {
               <VideoCard
                 video={video}
                 mode={analyzeMode}
-                onGenerateScript={handleGenerateScript}
                 showStats
                 size="medium"
               />

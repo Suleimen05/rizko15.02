@@ -17,7 +17,7 @@ import shutil
 from ..core.database import get_db
 from ..services.gemini_script_generator import GeminiScriptGenerator
 from .dependencies import get_current_user, CreditManager
-from ..db.models import User, Workflow, WorkflowStatus, WorkflowRun, WorkflowRunStatus
+from ..db.models import User, Workflow, WorkflowStatus, WorkflowRun, WorkflowRunStatus, Project
 from ..services.workflow_templates import get_templates, get_template_by_id
 
 # Reuse AI clients from chat_sessions
@@ -1349,6 +1349,7 @@ class WorkflowExecuteRequestV2(BaseModel):
     workflow_id: Optional[int] = None
     workflow_name: Optional[str] = None
     language: Optional[str] = "English"
+    project_id: Optional[int] = None
 
 
 @router.post("/execute", response_model=WorkflowExecuteResponse)
@@ -1433,6 +1434,27 @@ async def execute_workflow(
                 }
             )
 
+        # Load project context if project_id provided
+        project_context_prefix = ""
+        if request.project_id:
+            project = db.query(Project).filter(
+                Project.id == request.project_id,
+                Project.user_id == current_user.id
+            ).first()
+            if project and project.profile_data:
+                p = project.profile_data
+                audience = p.get('audience', {})
+                audience_str = f"Age: {audience.get('age', 'N/A')}, Gender: {audience.get('gender', 'N/A')}, Interests: {', '.join(audience.get('interests', []))}"
+                project_context_prefix = f"""PROJECT CONTEXT (tailor content for this project):
+- Niche: {p.get('niche', 'N/A')} / {p.get('sub_niche', '')}
+- Content format: {', '.join(p.get('format', []))}
+- Target audience: {audience_str}
+- Tone/style: {p.get('tone', '')}
+- Platforms: {', '.join(p.get('platforms', []))}
+- MUST AVOID: {', '.join(p.get('exclude', []))}
+
+"""
+
         # Get execution order
         execution_order = topological_sort(request.nodes, request.connections)
         logger.info(f"[WORKFLOW] Execution order: {execution_order}")
@@ -1460,6 +1482,10 @@ async def execute_workflow(
                 for dep_id in dependencies
                 if dep_id in node_outputs
             )
+
+            # Prepend project context for AI processing nodes
+            if project_context_prefix and node.type in ("analyze", "extract", "style", "generate", "refine", "script", "storyboard"):
+                input_content = project_context_prefix + input_content
 
             # Find upstream video data (from connected video nodes)
             upstream_video = None

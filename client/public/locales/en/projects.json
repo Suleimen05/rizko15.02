@@ -1,0 +1,157 @@
+{
+  "title": "Projects",
+  "subtitle": "Content strategy profiles for personalizing AI and search",
+  "newProject": "New Project",
+  "noProjects": "No projects yet",
+  "noProjectsDesc": "Create your first project to personalize AI and search results",
+  "createFirst": "Create First Project",
+
+  "switcher": {
+    "label": "Project",
+    "noProject": "No Project",
+    "allProjects": "All Projects",
+    "newProject": "+ New Project"
+  },
+
+  "card": {
+    "competitors": "Competitors",
+    "saved": "Saved videos",
+    "niche": "Niche",
+    "format": "Format",
+    "audience": "Audience",
+    "edit": "Edit",
+    "archive": "Archive",
+    "unarchive": "Activate",
+    "delete": "Delete",
+    "archived": "Archived",
+    "setActive": "Set Active",
+    "active": "Active"
+  },
+
+  "create": {
+    "title": "Create Project",
+    "step1Title": "About Your Content",
+    "step1Desc": "Tell us about your niche and format",
+    "step2Title": "Describe Your Brand",
+    "step2Desc": "Tell us more about your content in text or voice",
+    "step3Title": "Review Profile",
+    "step3Desc": "AI generated your content profile",
+
+    "projectName": "Project Name",
+    "projectNamePlaceholder": "e.g. Fitness UGC, Cooking Blog...",
+
+    "niche": "Niche",
+    "format": "Content Format",
+    "platform": "Platforms",
+    "audience": "Target Audience",
+
+    "niches": {
+      "fitness": "Fitness",
+      "cooking": "Cooking",
+      "beauty": "Beauty",
+      "fashion": "Fashion",
+      "tech": "Tech",
+      "education": "Education",
+      "entertainment": "Entertainment",
+      "business": "Business",
+      "lifestyle": "Lifestyle",
+      "gaming": "Gaming",
+      "travel": "Travel",
+      "music": "Music",
+      "art": "Art",
+      "health": "Health",
+      "finance": "Finance",
+      "pets": "Pets",
+      "other": "Other"
+    },
+
+    "formats": {
+      "ugc": "UGC",
+      "talking_head": "Talking Head",
+      "tutorial": "Tutorial",
+      "vlog": "Vlog",
+      "shorts": "Short Clips",
+      "educational": "Educational",
+      "entertainment": "Entertainment",
+      "review": "Reviews",
+      "unboxing": "Unboxing",
+      "storytelling": "Storytelling"
+    },
+
+    "platforms_list": {
+      "tiktok": "TikTok",
+      "instagram": "Instagram",
+      "youtube": "YouTube",
+      "twitter": "X (Twitter)"
+    },
+
+    "audiences": {
+      "13-17": "13-17",
+      "18-24": "18-24",
+      "25-34": "25-34",
+      "35-44": "35-44",
+      "45+": "45+"
+    },
+
+    "descriptionLabel": "Describe your content and brand",
+    "descriptionPlaceholder": "Tell us about your content style, target audience, what makes you unique, what topics you cover...",
+    "recordVoice": "Record voice",
+    "stopRecording": "Stop",
+    "recording": "Recording...",
+    "transcribing": "Transcribing...",
+    "orText": "or type below",
+
+    "generating": "Generating profile...",
+    "profileReady": "Profile Ready!",
+    "looksGood": "Looks Good",
+    "editProfile": "Edit Profile",
+    "regenerate": "Regenerate",
+
+    "back": "Back",
+    "next": "Next",
+    "create": "Create Project",
+    "finish": "Finish",
+
+    "profile": {
+      "niche": "Niche",
+      "subNiche": "Sub-niche",
+      "format": "Formats",
+      "audience": "Audience",
+      "tone": "Tone",
+      "platforms": "Platforms",
+      "keywords": "Keywords",
+      "exclude": "Excluded Content"
+    }
+  },
+
+  "edit": {
+    "title": "Edit Project",
+    "backToProjects": "Back to Projects",
+    "save": "Save Changes",
+    "regenerate": "Regenerate Profile",
+    "tone": "Tone of Voice",
+    "tonePlaceholder": "e.g. friendly, professional, casual, humorous...",
+    "addKeyword": "Add keyword...",
+    "addExclude": "Add excluded topic..."
+  },
+
+  "deleteConfirm": {
+    "title": "Delete Project",
+    "message": "Are you sure you want to delete this project? Saved videos and competitors will be unlinked.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+
+  "toast": {
+    "created": "Project created",
+    "updated": "Project updated",
+    "deleted": "Project deleted",
+    "profileGenerated": "Profile generated successfully",
+    "error": "Something went wrong"
+  },
+
+  "smartSearch": {
+    "badge": "Smart Search",
+    "relevanceScore": "Relevance"
+  }
+}

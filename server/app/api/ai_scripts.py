@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..services.gemini_script_generator import GeminiScriptGenerator
 from ..core.database import get_db
-from ..db.models import User, UserScript, ChatMessage, UserSettings
+from ..db.models import User, UserScript, ChatMessage, UserSettings, Project
 from ..api.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -167,6 +167,7 @@ class ChatRequest(BaseModel):
     model: str = Field(default="gemini", description="AI model")
     mode: str = Field(default="script", description="Mode: script, ideas, analysis, improve, hook")
     language: str = Field(default="English", description="Response language")
+    project_id: Optional[int] = Field(default=None, description="Project ID for personalization")
 
 
 class ChatResponse(BaseModel):
@@ -400,7 +401,30 @@ async def ai_chat(
         if request.language and request.language.lower() != "english":
             lang_instruction = f"IMPORTANT: You MUST respond entirely in {request.language}. All text, headings, and content must be in {request.language}.\n\n"
 
-        prompt = f"""{lang_instruction}{system_prompt}
+        # Inject project context if project_id provided
+        project_context = ""
+        if request.project_id:
+            project = db.query(Project).filter(
+                Project.id == request.project_id,
+                Project.user_id == current_user.id
+            ).first()
+            if project and project.profile_data:
+                p = project.profile_data
+                audience = p.get('audience', {})
+                audience_str = f"Age: {audience.get('age', 'N/A')}, Gender: {audience.get('gender', 'N/A')}, Interests: {', '.join(audience.get('interests', []))}"
+                project_context = f"""PROJECT CONTEXT (personalize ALL responses for this project):
+- Niche: {p.get('niche', 'N/A')} / {p.get('sub_niche', '')}
+- Content format: {', '.join(p.get('format', []))}
+- Target audience: {audience_str}
+- Tone/style: {p.get('tone', '')}
+- Platforms: {', '.join(p.get('platforms', []))}
+- MUST AVOID: {', '.join(p.get('exclude', []))}
+
+Tailor ALL responses specifically for this project's audience and style.
+
+"""
+
+        prompt = f"""{lang_instruction}{project_context}{system_prompt}
 
 CONVERSATION HISTORY:
 {history_text}

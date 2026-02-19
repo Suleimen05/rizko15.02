@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner';
 import { apiService } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProject } from '@/contexts/ProjectContext';
 import { VideoCard } from '@/components/VideoCard';
 import type { TikTokVideo } from '@/types';
 
@@ -32,6 +33,7 @@ interface SavedTrend {
   trend_id: number;
   notes: string | null;
   tags: string[];
+  project_id: number | null;
   created_at: string;
   trend: {
     id: number;
@@ -54,10 +56,12 @@ interface SavedTrend {
 export function Saved() {
   const { user: _user } = useAuth();
   const { t } = useTranslation('videos');
+  const { projects } = useProject();
   const [favorites, setFavorites] = useState<SavedTrend[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all');
   const [allTags, setAllTags] = useState<string[]>([]);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
@@ -67,13 +71,17 @@ export function Saved() {
   const loadFavorites = useCallback(async (pageNum = 1, append = false) => {
     try {
       setLoading(true);
-      const params: { page: number; per_page: number; tag?: string } = {
+      const params: { page: number; per_page: number; tag?: string; project_id?: number } = {
         page: pageNum,
         per_page: 12,
       };
 
       if (selectedTag && selectedTag !== 'all') {
         params.tag = selectedTag;
+      }
+
+      if (selectedProjectFilter && selectedProjectFilter !== 'all') {
+        params.project_id = Number(selectedProjectFilter);
       }
 
       const response = await apiService.getFavorites(params);
@@ -93,7 +101,7 @@ export function Saved() {
     } finally {
       setLoading(false);
     }
-  }, [selectedTag, t]);
+  }, [selectedTag, selectedProjectFilter, t]);
 
   const loadTags = useCallback(async () => {
     try {
@@ -111,7 +119,7 @@ export function Saved() {
 
   useEffect(() => {
     loadFavorites(1);
-  }, [selectedTag, loadFavorites]);
+  }, [selectedTag, selectedProjectFilter, loadFavorites]);
 
   const handleDelete = async (favoriteId: number) => {
     try {
@@ -227,6 +235,24 @@ export function Saved() {
             ))}
           </SelectContent>
         </Select>
+
+        {projects.length > 0 && (
+          <Select value={selectedProjectFilter} onValueChange={setSelectedProjectFilter}>
+            <SelectTrigger className="w-[200px]">
+              <FolderOpen className="h-4 w-4 mr-2" />
+              <SelectValue placeholder={t('saved.filterByProject')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('saved.allProjects')}</SelectItem>
+              {projects.map(proj => (
+                <SelectItem key={proj.id} value={String(proj.id)}>
+                  {proj.icon && <span className="mr-1">{proj.icon}</span>}
+                  {proj.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Content */}
@@ -250,15 +276,21 @@ export function Saved() {
         <>
           {/* Grid - Using VideoCard like Discover and Competitors */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filteredFavorites.map((favorite) => (
-              <VideoCard
-                key={favorite.id}
-                video={convertToTikTokVideo(favorite)}
-                mode="light"
-                showStats
-                size="medium"
-              />
-            ))}
+            {filteredFavorites.map((favorite) => {
+              const proj = favorite.project_id
+                ? projects.find(p => p.id === favorite.project_id)
+                : null;
+              return (
+                <VideoCard
+                  key={favorite.id}
+                  video={convertToTikTokVideo(favorite)}
+                  mode="light"
+                  showStats
+                  size="medium"
+                  projectLabel={proj ? { name: proj.name, icon: proj.icon } : null}
+                />
+              );
+            })}
           </div>
 
           {/* Load More */}

@@ -302,6 +302,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           isLoading: false,
         });
         scheduleTokenRefresh(storedData.tokens.expiresAt);
+
+        // Background refresh user data from backend (subscription, credits, etc.)
+        try {
+          const profileResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+            headers: { Authorization: `Bearer ${storedData.tokens.accessToken}` },
+          });
+          if (profileResponse.ok) {
+            const profile = await profileResponse.json();
+            const freshUser: User = {
+              id: profile.id,
+              email: profile.email,
+              name: profile.full_name || profile.email.split('@')[0],
+              avatar: profile.avatar_url || '',
+              subscription: profile.subscription_tier || 'free',
+              credits: profile.credits || 0,
+              preferences: storedData.user?.preferences || {
+                niches: [],
+                languages: ['en'],
+                regions: ['US'],
+              },
+            };
+            setState((prev) => ({ ...prev, user: freshUser }));
+            storeAuthData(storedData.tokens, freshUser);
+          }
+        } catch {
+          // Non-critical: user data will refresh on next login
+        }
         return;
       }
 

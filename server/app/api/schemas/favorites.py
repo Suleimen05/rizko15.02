@@ -26,6 +26,10 @@ class FavoriteCreate(BaseModel):
         max_items=10,
         description="Custom tags for organization"
     )
+    project_id: Optional[int] = Field(
+        default=None,
+        description="Project ID to bind favorite to"
+    )
 
     @field_validator('notes')
     @classmethod
@@ -110,6 +114,7 @@ class FavoriteResponse(BaseModel):
     trend_id: int
     notes: Optional[str] = None
     tags: List[str] = []
+    project_id: Optional[int] = None
     created_at: datetime
 
     # Include trend data

@@ -551,6 +551,9 @@ class CreditManager:
         "ai_script": 2,
         "competitor_add": 1,
         "export_report": 3,
+        "project_search": 2,
+        "project_generate_profile": 2,
+        "project_transcribe": 1,
     }
 
     # Workflow node costs per model (AI nodes only - video/brand are free)

@@ -9,6 +9,7 @@ import type { Competitor } from '@/types';
 import { toast } from 'sonner';
 import { apiClient } from '@/services/api';
 import { proxyAvatarUrl } from '@/utils/imageProxy';
+import { useProject } from '@/contexts/ProjectContext';
 import i18n from '@/lib/i18n';
 
 interface CompetitorCardProps {
@@ -152,6 +153,7 @@ function CompetitorCard({ competitor, onRemove, onViewDetails, t }: CompetitorCa
 
 export function Competitors() {
   const { t } = useTranslation('competitors');
+  const { activeProject } = useProject();
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -257,7 +259,8 @@ export function Competitors() {
           follower_count: channel.follower_count,
           video_count: channel.video_count,
           nickname: channel.nickname || channel.username
-        }
+        },
+        ...(activeProject?.id && { project_id: activeProject.id }),
       });
       toast.success(i18n.t('toasts:competitors.addSuccess', { username: channel.username }));
       setSearchQuery('');

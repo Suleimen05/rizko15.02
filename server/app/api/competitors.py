@@ -223,6 +223,7 @@ def get_all_competitors(
     page: int = 1,
     per_page: int = 20,
     active_only: bool = True,
+    project_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -230,11 +231,15 @@ def get_all_competitors(
     Get paginated list of tracked competitors.
 
     User Isolation: Only returns competitors belonging to the authenticated user.
+    Optional project_id filter to show only competitors bound to a project.
     """
     query = db.query(Competitor).filter(Competitor.user_id == current_user.id)
 
     if active_only:
         query = query.filter(Competitor.is_active == True)
+
+    if project_id is not None:
+        query = query.filter(Competitor.project_id == project_id)
 
     total = query.count()
     offset = (page - 1) * per_page
@@ -413,7 +418,8 @@ async def add_competitor(
         is_active=True,
         last_analyzed_at=datetime.utcnow(),
         notes=data.notes,
-        tags=data.tags or []
+        tags=data.tags or [],
+        project_id=data.project_id
     )
 
     db.add(competitor)

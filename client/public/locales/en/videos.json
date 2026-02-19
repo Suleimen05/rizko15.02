@@ -1,23 +1,33 @@
 {
   "saved": {
     "title": "Saved Videos",
-    "count": "{{count}} saved video in your collection",
-    "count_plural": "{{count}} saved videos in your collection",
-    "search": "Search saved videos...",
+    "subtitle": "{{count}} saved video in your collection",
+    "subtitlePlural": "{{count}} saved videos in your collection",
+    "search": {
+      "placeholder": "Search saved videos..."
+    },
     "filterByTag": "Filter by tag",
     "allTags": "All tags",
-    "emptyTitle": "No saved videos yet",
-    "emptyFiltered": "No videos match your filters. Try adjusting your search.",
-    "emptyDefault": "Start saving videos from Discover or Deep Analysis to build your collection.",
+    "filterByProject": "Filter by project",
+    "allProjects": "All projects",
+    "emptyState": {
+      "title": "No saved videos yet",
+      "noResults": "No videos match your filters. Try adjusting your search.",
+      "noVideos": "Start saving videos from Discover or Deep Analysis to build your collection."
+    },
     "loadMore": "Load More",
     "loading": "Loading...",
-    "removeTitle": "Remove from saved?",
-    "removeDescription": "This video will be removed from your saved collection. You can always save it again later.",
-    "cancel": "Cancel",
-    "remove": "Remove",
-    "removed": "Video removed from saved",
-    "removeFailed": "Failed to remove video",
-    "loadFailed": "Failed to load saved videos"
+    "toast": {
+      "loadError": "Failed to load saved videos",
+      "removeSuccess": "Video removed from saved",
+      "removeError": "Failed to remove video"
+    },
+    "deleteDialog": {
+      "title": "Remove from saved?",
+      "description": "This video will be removed from your saved collection. You can always save it again later.",
+      "cancel": "Cancel",
+      "remove": "Remove"
+    }
   },
   "myPosts": {
     "title": "My Posts",

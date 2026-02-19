@@ -16,6 +16,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useAuth } from './AuthContext';
+import { useProject } from './ProjectContext';
 import { apiService } from '@/services/api';
 import { toast } from 'sonner';
 import i18n from '@/lib/i18n';
@@ -59,16 +60,20 @@ interface ChatContextType {
   isLoading: boolean;
   isStreaming: boolean;
   credits: CreditsInfo | null;
+  currentModel: string;
+  currentMode: string;
   loadSessions: () => Promise<void>;
   createSession: (title?: string, model?: string) => Promise<string | null>;
   selectSession: (sessionId: string) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
   renameSession: (sessionId: string, title: string) => Promise<void>;
   pinSession: (sessionId: string, pinned: boolean) => Promise<void>;
-  sendMessage: (message: string, mode?: string, model?: string) => Promise<void>;
+  sendMessage: (message: string, mode?: string, model?: string, context?: string) => Promise<void>;
   stopGeneration: () => void;
   loadCredits: () => Promise<void>;
   setCurrentSessionId: (id: string | null) => void;
+  setCurrentModel: (model: string) => void;
+  setCurrentMode: (mode: string) => void;
   clearMessages: () => void;
 }
 
@@ -84,6 +89,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { tokens, isAuthenticated } = useAuth();
+  const { activeProject } = useProject();
   const token = tokens?.accessToken;
 
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -92,6 +98,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [credits, setCredits] = useState<CreditsInfo | null>(null);
+  const [currentModel, setCurrentModel] = useState('gemini');
+  const [currentMode, setCurrentMode] = useState('chat');
 
   // Track previous auth state to detect login/logout
   const prevAuthRef = useRef<boolean>(false);
@@ -174,6 +182,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentSessionId(sessionId);
       setIsLoading(true);
 
+      // Restore model/mode from session metadata
+      const session = sessions.find((s) => s.session_id === sessionId);
+      if (session) {
+        if (session.model) setCurrentModel(session.model);
+        if (session.mode) setCurrentMode(session.mode);
+      }
+
       try {
         const data = await apiService.getChatMessages(sessionId);
         setMessages(
@@ -191,7 +206,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     },
-    [token]
+    [token, sessions]
   );
 
   // ---------------------------------------------------------------------------
@@ -284,7 +299,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Send message — auto-creates session if needed
   // ---------------------------------------------------------------------------
   const sendMessage = useCallback(
-    async (message: string, mode?: string, model?: string) => {
+    async (message: string, mode?: string, model?: string, context?: string) => {
       if (!token || isStreaming) return;
 
       let sessionId = currentSessionId;
@@ -328,6 +343,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           mode,
           model,
           language: i18n.language === 'ru' ? 'Russian' : 'English',
+          ...(activeProject?.id && { project_id: activeProject.id }),
+          ...(context && { context }),
         }, controller.signal);
 
         // Update user message with real ID from database
@@ -416,7 +433,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIsStreaming(false);
       }
     },
-    [token, currentSessionId, isStreaming]
+    [token, currentSessionId, isStreaming, activeProject]
   );
 
   // ---------------------------------------------------------------------------
@@ -482,6 +499,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isLoading,
         isStreaming,
         credits,
+        currentModel,
+        currentMode,
         loadSessions,
         createSession,
         selectSession,
@@ -492,6 +511,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         stopGeneration,
         loadCredits,
         setCurrentSessionId,
+        setCurrentModel,
+        setCurrentMode,
         clearMessages,
       }}
     >

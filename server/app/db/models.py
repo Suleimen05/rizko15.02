@@ -178,6 +178,12 @@ class User(Base):
         cascade="all, delete-orphan",
         lazy="dynamic"
     )
+    projects = relationship(
+        "Project",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
+    )
 
     # Composite index for OAuth lookups
     __table_args__ = (
@@ -358,9 +364,18 @@ class UserFavorite(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    # Project binding (optional)
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+
     # Relationships
     user = relationship("User", back_populates="favorites")
     trend = relationship("Trend", back_populates="favorites")
+    project = relationship("Project", back_populates="favorites")
 
     # Unique constraint: user can favorite a trend only once
     __table_args__ = (
@@ -620,8 +635,17 @@ class Competitor(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     last_analyzed_at = Column(DateTime, nullable=True)
 
-    # Relationship
+    # Project binding (optional)
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+
+    # Relationships
     user = relationship("User", back_populates="competitors")
+    project = relationship("Project", back_populates="competitors")
 
     # Constraints
     __table_args__ = (
@@ -937,3 +961,238 @@ class WorkflowRun(Base):
 
     def __repr__(self):
         return f"<WorkflowRun(id={self.id}, workflow='{self.workflow_name}', status={self.status})>"
+
+
+# =============================================================================
+# PROJECT MODELS
+# =============================================================================
+
+class Project(Base):
+    """
+    Content strategy profile for personalizing AI and search.
+    Users can have multiple projects (e.g. "Fitness UGC", "Cooking blog").
+    """
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    name = Column(String(255), nullable=False)
+    icon = Column(String(50), nullable=True)  # emoji or icon code
+    status = Column(String(20), default="active", nullable=False)  # active / archived
+
+    # AI-generated profile (from onboarding)
+    profile_data = Column(JSONB, default={}, nullable=False)
+    # Raw user input (form answers + transcript)
+    raw_input = Column(JSONB, default={}, nullable=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="projects")
+    competitors = relationship("Competitor", back_populates="project")
+    favorites = relationship("UserFavorite", back_populates="project")
+    video_scores = relationship("ProjectVideoScore", back_populates="project", cascade="all, delete-orphan")
+    super_vision_config = relationship(
+        "SuperVisionConfig", back_populates="project",
+        uselist=False, cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index('ix_projects_user_status', 'user_id', 'status'),
+    )
+
+    def __repr__(self):
+        return f"<Project(id={self.id}, user_id={self.user_id}, name='{self.name}')>"
+
+
+class ProjectVideoScore(Base):
+    """
+    Cached AI relevance scores for videos per project.
+    Avoids re-scoring the same video for the same project (TTL 24h).
+    """
+    __tablename__ = "project_video_scores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    video_platform_id = Column(String(100), nullable=False, index=True)
+    score = Column(Integer, default=0, nullable=False)
+    reason = Column(String(255), nullable=True)
+    scored_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    project = relationship("Project", back_populates="video_scores")
+
+    __table_args__ = (
+        UniqueConstraint('project_id', 'video_platform_id', name='uix_project_video_score'),
+    )
+
+
+# =============================================================================
+# SUPER VISION MODELS
+# =============================================================================
+
+class SuperVisionStatus(str, enum.Enum):
+    """Super Vision config status."""
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ERROR = "error"
+
+
+class SuperVisionConfig(Base):
+    """
+    Per-project Super Vision configuration.
+    Controls automated video discovery with AI curation + Gemini Vision.
+    One config per project (1:1 relationship).
+    """
+    __tablename__ = "super_vision_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True
+    )
+
+    # Status
+    status = Column(
+        SQLEnum(SuperVisionStatus, values_callable=lambda x: [e.value for e in x]),
+        default=SuperVisionStatus.PAUSED,
+        nullable=False
+    )
+
+    # User-configurable filters
+    min_views = Column(Integer, default=500000, nullable=False)
+    date_range_days = Column(Integer, default=7, nullable=False)
+    platform = Column(String(20), default="tiktok", nullable=False)
+    scan_interval_hours = Column(Integer, default=12, nullable=False)  # min 8
+    max_vision_videos = Column(Integer, default=5, nullable=False)     # 1-10
+
+    # Override keywords (optional — if empty, uses project profile keywords)
+    custom_keywords = Column(JSONB, default=[], nullable=False)
+
+    # Scoring thresholds
+    text_score_threshold = Column(Integer, default=70, nullable=False)
+
+    # Scheduling state
+    last_run_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
+    last_run_status = Column(String(50), nullable=True)
+    last_run_stats = Column(JSONB, default={}, nullable=False)
+    scheduler_job_id = Column(String(100), nullable=True)
+
+    # Error tracking
+    consecutive_errors = Column(Integer, default=0, nullable=False)
+    last_error = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User")
+    project = relationship("Project", back_populates="super_vision_config")
+    results = relationship(
+        "SuperVisionResult", back_populates="config",
+        cascade="all, delete-orphan", lazy="dynamic"
+    )
+
+    __table_args__ = (
+        Index('ix_sv_configs_user_status', 'user_id', 'status'),
+        Index('ix_sv_configs_next_run', 'status', 'next_run_at'),
+    )
+
+    def __repr__(self):
+        return f"<SuperVisionConfig(id={self.id}, project_id={self.project_id}, status={self.status.value})>"
+
+
+class SuperVisionResult(Base):
+    """
+    Curated video result from a Super Vision scan.
+    Contains both text-based and vision-based AI scoring.
+    """
+    __tablename__ = "super_vision_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    config_id = Column(
+        Integer,
+        ForeignKey("super_vision_configs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Video data (denormalized for fast queries without JOIN)
+    video_platform_id = Column(String(100), nullable=False, index=True)
+    video_url = Column(Text, nullable=False)
+    video_cover_url = Column(Text, nullable=True)
+    video_play_addr = Column(Text, nullable=True)
+    video_description = Column(Text, nullable=True)
+    video_author = Column(String(100), nullable=True)
+    video_stats = Column(JSONB, default={}, nullable=False)
+
+    # AI Text Scoring (from batch_ai_score)
+    text_score = Column(Integer, default=0, nullable=False)
+    text_reason = Column(String(255), nullable=True)
+
+    # Gemini Vision Scoring
+    vision_score = Column(Integer, nullable=True)
+    vision_analysis = Column(Text, nullable=True)
+    vision_match_reason = Column(String(500), nullable=True)
+
+    # Combined final score (40% text + 60% vision, or text-only if no vision)
+    final_score = Column(Integer, default=0, nullable=False)
+
+    # Metadata
+    scan_batch_id = Column(String(50), nullable=False)
+    is_dismissed = Column(Boolean, default=False, nullable=False)
+    is_saved = Column(Boolean, default=False, nullable=False)
+
+    # Timestamps
+    found_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    config = relationship("SuperVisionConfig", back_populates="results")
+    user = relationship("User")
+    project = relationship("Project")
+
+    __table_args__ = (
+        UniqueConstraint('config_id', 'video_platform_id', name='uix_sv_result_config_video'),
+        Index('ix_sv_results_project_score', 'project_id', 'final_score'),
+        Index('ix_sv_results_config_batch', 'config_id', 'scan_batch_id'),
+        Index('ix_sv_results_user_found', 'user_id', 'found_at'),
+    )
+
+    def __repr__(self):
+        return f"<SuperVisionResult(id={self.id}, video={self.video_platform_id}, score={self.final_score})>"

@@ -1,14 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
-import { Play, Heart, MessageCircle, Share2, Eye, Bookmark, Sparkles, TrendingUp, Music, ExternalLink, Info, Flame, Copy, Wand2, Loader2, Check, Bot, Send, User, Coins } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Play, Heart, MessageCircle, Share2, Eye, Bookmark, Sparkles, TrendingUp, Music, ExternalLink, Info, Flame, Copy, Loader2, Bot } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { UTSBreakdown } from '@/components/metrics/UTSBreakdown';
@@ -18,49 +16,34 @@ import { apiService } from '@/services/api';
 import i18n from '@/lib/i18n';
 // TikTok Embed - официальное легальное решение
 import type { TikTokVideo, TikTokVideoDeep, AnalysisMode } from '@/types';
-import { useAIScriptGenerator } from '@/hooks/useTikTok';
+import { useProject } from '@/contexts/ProjectContext';
 
 interface VideoCardProps {
   video: TikTokVideo | TikTokVideoDeep;
   mode?: AnalysisMode;
-  onGenerateScript?: (video: TikTokVideo) => void;
   onSave?: (video: TikTokVideo) => void;
   showStats?: boolean;
   size?: 'small' | 'medium' | 'large';
+  projectLabel?: { name: string; icon?: string } | null;
 }
 
 export function VideoCard({
   video,
   mode = 'light',
-  onGenerateScript,
   onSave,
   showStats = true,
   size = 'medium',
+  projectLabel,
 }: VideoCardProps) {
+  const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [favoriteId, setFavoriteId] = useState<number | null>(null);
   const [savingInProgress, setSavingInProgress] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showScriptModal, setShowScriptModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-
-  // AI Chat state
-  const [showAIChat, setShowAIChat] = useState(false);
-  const [chatMessages, setChatMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatCreditsUsed, setChatCreditsUsed] = useState(0);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // AI Script Generator hook
-  const { script, loading: scriptLoading, error: scriptError, generate } = useAIScriptGenerator();
-  
-  // Scroll to bottom of chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+  const { activeProject } = useProject();
 
   // Check if video is saved on mount
   useEffect(() => {
@@ -105,7 +88,10 @@ export function VideoCard({
 
         if (trendId) {
           // Already in DB — just add to favorites
-          const result = await apiService.addFavorite({ trend_id: trendId });
+          const result = await apiService.addFavorite({
+            trend_id: trendId,
+            ...(activeProject?.id && { project_id: activeProject.id }),
+          });
           setIsSaved(true);
           setFavoriteId(result.id);
         } else {
@@ -120,6 +106,7 @@ export function VideoCard({
             author_username: video.author_username || video.author?.uniqueId || 'unknown',
             stats: video.stats || {},
             viral_score: video.viralScore || video.uts_score || 0,
+            ...(activeProject?.id && { project_id: activeProject.id }),
           });
           setIsSaved(true);
           setFavoriteId(result.id);
@@ -138,67 +125,33 @@ export function VideoCard({
     }
   };
   
-  // AI Chat function — uses apiService with auth + credit tracking
-  const sendChatMessage = async (overrideMessage?: string) => {
-    const userMessage = (overrideMessage || chatInput).trim();
-    if (!userMessage || chatLoading) return;
+  // Navigate to AI Chat (Workspace) with video data as context
+  const handleAIAnalysis = () => {
+    const authorName = video.author?.uniqueId || video.author_username || '';
+    const videoUrl = video.url || (video.id ? `https://www.tiktok.com/@${authorName}/video/${video.id}` : '');
+    const coverImage = video.video?.cover || video.cover_url || '';
 
-    setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-    setChatLoading(true);
-
-    try {
-      const videoContext = [
-        `Video: "${video.description || video.title}"`,
-        `Author: @${video.author?.uniqueId || video.author_username}`,
-        `Views: ${video.stats?.playCount?.toLocaleString() || 0}`,
-        `Likes: ${video.stats?.diggCount?.toLocaleString() || 0}`,
-        `Comments: ${video.stats?.commentCount?.toLocaleString() || 0}`,
-        `Shares: ${video.stats?.shareCount?.toLocaleString() || 0}`,
-        `UTS Score: ${video.uts_score || video.viralScore || 0}`,
-      ].join('\n');
-
-      const data = await apiService.chatWithAI({
-        message: userMessage,
-        context: videoContext,
-        history: chatMessages.slice(-6),
-        mode: 'analysis',
-        language: i18n.language === 'ru' ? 'Russian' : 'English',
-      });
-
-      setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
-      if (data.credits_used > 0) {
-        setChatCreditsUsed(prev => prev + data.credits_used);
-      }
-    } catch (error: any) {
-      const status = error?.response?.status;
-      if (status === 402) {
-        setChatMessages(prev => [...prev, {
-          role: 'assistant',
-          content: i18n.language === 'ru'
-            ? 'Недостаточно кредитов. Пополните баланс для продолжения.'
-            : 'Not enough credits. Please top up to continue.'
-        }]);
-      } else if (status === 401) {
-        setChatMessages(prev => [...prev, {
-          role: 'assistant',
-          content: i18n.language === 'ru'
-            ? 'Войдите в аккаунт для использования AI-аналитика.'
-            : 'Please log in to use AI Video Analyst.'
-        }]);
-      } else {
-        setChatMessages(prev => [...prev, {
-          role: 'assistant',
-          content: i18n.language === 'ru'
-            ? 'Произошла ошибка. Попробуйте снова.'
-            : 'Sorry, I encountered an error. Please try again.'
-        }]);
-      }
-    } finally {
-      setChatLoading(false);
-    }
+    setShowDetails(false);
+    navigate('/dashboard/ai-workspace', {
+      state: {
+        videoContext: {
+          url: videoUrl,
+          description: video.description || video.title || '',
+          author: authorName,
+          cover: coverImage,
+          stats: {
+            playCount: video.stats?.playCount || 0,
+            diggCount: video.stats?.diggCount || 0,
+            commentCount: video.stats?.commentCount || 0,
+            shareCount: video.stats?.shareCount || 0,
+          },
+          uts_score: video.uts_score || (video as any).viralScore || 0,
+          play_addr: video.play_addr || video.video?.playAddr || '',
+        },
+      },
+    });
   };
-  
+
   // Check if video has Deep Analyze data
   const isDeepVideo = 'uts_breakdown' in video && mode === 'deep';
 
@@ -219,21 +172,6 @@ export function VideoCard({
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const handleGenerateScript = async () => {
-    await generate(
-      video.description || video.title || 'Viral TikTok video',
-      {
-        playCount: video.stats?.playCount || 0,
-        diggCount: video.stats?.diggCount || 0,
-        commentCount: video.stats?.commentCount || 0,
-        shareCount: video.stats?.shareCount || 0,
-      },
-      'engaging',
-      'general',
-      30
-    );
-    setShowScriptModal(true);
-  };
 
   const engagementRate = video.engagementRate || 0;
   const viralScore = video.uts_score || video.viralScore || 0;
@@ -360,20 +298,6 @@ export function VideoCard({
                 {formatDuration(video.video?.duration || 0)}
               </div>
 
-              {/* AI Generate Button */}
-              {onGenerateScript && isHovered && (
-                <Button
-                  size="sm"
-                  className="absolute bottom-2 left-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onGenerateScript(video);
-                  }}
-                >
-                  <Sparkles className="h-4 w-4 mr-1" />
-                  AI Script
-                </Button>
-              )}
             </div>
           )}
           
@@ -389,6 +313,17 @@ export function VideoCard({
               <TrendingUp className="h-4 w-4 mr-1" />
               {viralScore.toFixed(0)}
             </Badge>
+          )}
+
+          {/* Project Badge */}
+          {projectLabel && (
+            <div className={cn(
+              "absolute left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-600/80 backdrop-blur-sm text-white text-[10px] font-medium shadow-sm",
+              viralScore > 0 ? "top-10" : "top-2"
+            )}>
+              {projectLabel.icon && <span>{projectLabel.icon}</span>}
+              <span className="max-w-[80px] truncate">{projectLabel.name}</span>
+            </div>
           )}
 
           {/* Open TikTok Button */}
@@ -566,22 +501,12 @@ export function VideoCard({
                 <h3 className="font-semibold">@{authorName}</h3>
               </div>
               <Button
-                onClick={handleGenerateScript}
+                onClick={handleAIAnalysis}
                 size="sm"
-                disabled={scriptLoading}
                 className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
               >
-                {scriptLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="h-4 w-4 mr-2" />
-                    Generate AI Script
-                  </>
-                )}
+                <Bot className="h-4 w-4 mr-2" />
+                {i18n.language === 'ru' ? 'AI Анализ' : 'AI Analysis'}
               </Button>
             </div>
 
@@ -797,314 +722,13 @@ export function VideoCard({
                     variant="default"
                     size="sm"
                     className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
-                    onClick={() => {
-                      setShowDetails(false);
-                      setShowAIChat(true);
-                      setChatCreditsUsed(0);
-                      // Add initial context message
-                      if (chatMessages.length === 0) {
-                        const author = video.author?.uniqueId || video.author_username;
-                        const views = video.stats?.playCount?.toLocaleString() || '0';
-                        const uts = video.uts_score || video.viralScore || 0;
-                        setChatMessages([{
-                          role: 'assistant',
-                          content: i18n.language === 'ru'
-                            ? `Привет! Анализирую видео от @${author}. Просмотров: ${views}, UTS: ${uts}. Что хотите узнать?`
-                            : `Hi! I'm analyzing this video by @${author}. It has ${views} views and a UTS Score of ${uts}. What would you like to know about it?`
-                        }]);
-                      }
-                    }}
+                    onClick={handleAIAnalysis}
                   >
                     <Bot className="h-4 w-4 mr-2" />
-                    {i18n.language === 'ru' ? 'AI Анализ' : 'Ask AI'}
+                    {i18n.language === 'ru' ? 'AI Анализ' : 'AI Analysis'}
                   </Button>
                 </div>
               </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* AI Script Modal */}
-      <Dialog open={showScriptModal} onOpenChange={setShowScriptModal}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Wand2 className="h-5 w-5 text-purple-600" />
-              Generated Viral Script
-            </DialogTitle>
-          </DialogHeader>
-
-          {scriptLoading && (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-              <span className="ml-3 text-muted-foreground">Generating your viral script with AI...</span>
-            </div>
-          )}
-
-          {scriptError && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-              <p className="text-red-600 dark:text-red-400">{scriptError}</p>
-            </div>
-          )}
-
-          {script && !scriptLoading && (
-            <div className="space-y-6">
-              {/* Hook Section */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-gradient-to-r from-purple-600 to-pink-600">Hook (0-3s)</Badge>
-                </div>
-                <Card className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-200">
-                  <p className="text-lg font-semibold">{script.hook}</p>
-                </Card>
-              </div>
-
-              {/* Body Section */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">Body</Badge>
-                </div>
-                <div className="space-y-3">
-                  {script.body.map((line, index) => (
-                    <Card key={index} className="p-4">
-                      <p className="text-sm leading-relaxed">{line}</p>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-
-              {/* Call to Action */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-gradient-to-r from-green-600 to-emerald-600">Call to Action</Badge>
-                </div>
-                <Card className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200">
-                  <p className="text-lg font-semibold">{script.callToAction}</p>
-                </Card>
-              </div>
-
-              {/* Viral Elements */}
-              {script.viralElements && script.viralElements.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Flame className="h-4 w-4 text-orange-500" />
-                    <span className="font-semibold">Viral Elements</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {script.viralElements.map((element, index) => (
-                      <Badge key={index} variant="secondary" className="bg-orange-100 dark:bg-orange-900/20">
-                        {element}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Tips */}
-              {script.tips && script.tips.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-blue-500" />
-                    <span className="font-semibold">Pro Tips</span>
-                  </div>
-                  <ul className="space-y-2">
-                    {script.tips.map((tip, index) => (
-                      <li key={index} className="flex items-start gap-2">
-                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-muted-foreground">{tip}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Duration */}
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span>Duration: ~{script.duration}s</span>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const scriptText = `
-HOOK: ${script.hook}
-
-BODY:
-${script.body.map((line, i) => `${i + 1}. ${line}`).join('\n')}
-
-CALL TO ACTION: ${script.callToAction}
-
-VIRAL ELEMENTS: ${script.viralElements?.join(', ')}
-
-TIPS:
-${script.tips?.map((tip, i) => `${i + 1}. ${tip}`).join('\n')}
-
-Duration: ~${script.duration}s
-                    `.trim();
-                    navigator.clipboard.writeText(scriptText);
-                  }}
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy Script
-                </Button>
-                <Button
-                  onClick={handleGenerateScript}
-                  variant="outline"
-                  disabled={scriptLoading}
-                >
-                  <Wand2 className="h-4 w-4 mr-2" />
-                  Regenerate
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* AI Chat Modal */}
-      <Dialog open={showAIChat} onOpenChange={setShowAIChat}>
-        <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0">
-          {/* Header */}
-          <div className="flex items-center gap-3 px-6 py-4 border-b bg-gradient-to-r from-purple-600/10 to-pink-600/10">
-            <div className="p-2 rounded-full bg-gradient-to-r from-purple-600 to-pink-600">
-              <Bot className="h-5 w-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <DialogTitle className="text-lg">
-                {i18n.language === 'ru' ? 'AI Аналитик Видео' : 'AI Video Analyst'}
-              </DialogTitle>
-              <p className="text-xs text-muted-foreground">
-                {i18n.language === 'ru' ? 'Задайте любой вопрос о видео' : 'Ask me anything about this video'}
-              </p>
-            </div>
-            {chatCreditsUsed > 0 && (
-              <Badge variant="secondary" className="flex items-center gap-1 text-xs">
-                <Coins className="h-3 w-3" />
-                {chatCreditsUsed} cr
-              </Badge>
-            )}
-          </div>
-
-          {/* Video Context Card */}
-          <div className="px-4 py-3 bg-muted/50 border-b">
-            <div className="flex items-center gap-3">
-              {coverImage && coverImage !== '/placeholder-video.svg' && (
-                <img src={coverImage} alt="" className="w-12 h-16 object-cover rounded" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">@{video.author?.uniqueId || video.author_username}</p>
-                <p className="text-xs text-muted-foreground truncate">{video.description || video.title}</p>
-                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Eye className="h-3 w-3" />
-                    {(video.stats?.playCount || 0).toLocaleString()}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Heart className="h-3 w-3" />
-                    {(video.stats?.diggCount || 0).toLocaleString()}
-                  </span>
-                  <Badge variant="secondary" className="text-xs">
-                    UTS: {video.uts_score || video.viralScore || 0}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-            {chatMessages.map((msg, index) => (
-              <div
-                key={index}
-                className={cn(
-                  "flex gap-3",
-                  msg.role === 'user' ? 'justify-end' : 'justify-start'
-                )}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="p-1.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 h-fit">
-                    <Bot className="h-4 w-4 text-white" />
-                  </div>
-                )}
-                <div
-                  className={cn(
-                    "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
-                    msg.role === 'user'
-                      ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
-                      : 'bg-muted'
-                  )}
-                >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                </div>
-                {msg.role === 'user' && (
-                  <div className="p-1.5 rounded-full bg-muted h-fit">
-                    <User className="h-4 w-4" />
-                  </div>
-                )}
-              </div>
-            ))}
-            {chatLoading && (
-              <div className="flex gap-3">
-                <div className="p-1.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600">
-                  <Bot className="h-4 w-4 text-white" />
-                </div>
-                <div className="bg-muted rounded-2xl px-4 py-2.5">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-2 h-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Quick Actions */}
-          <div className="px-4 py-2 border-t flex gap-2 overflow-x-auto">
-            {(i18n.language === 'ru'
-              ? ['Почему это вирусное?', 'Как повторить?', 'Целевая аудитория?', 'Лучшее время публикации?']
-              : ['Why is this viral?', 'How to recreate?', 'Target audience?', 'Best posting time?']
-            ).map((q) => (
-              <Button
-                key={q}
-                variant="outline"
-                size="sm"
-                className="text-xs whitespace-nowrap"
-                onClick={() => sendChatMessage(q)}
-                disabled={chatLoading}
-              >
-                {q}
-              </Button>
-            ))}
-          </div>
-
-          {/* Input */}
-          <div className="px-4 py-3 border-t bg-background">
-            <div className="flex gap-2">
-              <Input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder={i18n.language === 'ru' ? 'Спросите о видео...' : 'Ask about this video...'}
-                className="flex-1"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendChatMessage();
-                  }
-                }}
-                disabled={chatLoading}
-              />
-              <Button
-                onClick={() => sendChatMessage()}
-                disabled={!chatInput.trim() || chatLoading}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
             </div>
           </div>
         </DialogContent>

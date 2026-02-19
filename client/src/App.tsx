@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ChatProvider } from '@/contexts/ChatContext';
 import { WorkflowProvider } from '@/contexts/WorkflowContext';
+import { ProjectProvider } from '@/contexts/ProjectContext';
 import { LandingPage } from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
@@ -21,6 +22,10 @@ import { DeepAnalysis } from '@/pages/DeepAnalysis';
 import { AIScripts } from '@/pages/AIScripts';
 import { AIWorkspace } from '@/pages/AIWorkspace';
 const WorkflowBuilder = lazy(() => import('@/pages/WorkflowBuilder').then(m => ({ default: m.WorkflowBuilder })));
+const Projects = lazy(() => import('@/pages/Projects').then(m => ({ default: m.default })));
+const ProjectCreate = lazy(() => import('@/pages/ProjectCreate').then(m => ({ default: m.default })));
+const ProjectEdit = lazy(() => import('@/pages/ProjectEdit').then(m => ({ default: m.default })));
+const SuperVision = lazy(() => import('@/pages/SuperVision').then(m => ({ default: m.default })));
 import { Competitors } from '@/pages/Competitors';
 import { CompetitorFeed } from '@/pages/CompetitorFeed';
 import { AccountSearch } from '@/pages/AccountSearch';
@@ -157,6 +162,7 @@ function DashboardLayout() {
                 <Route path="/trending" element={<Trending />} />
                 <Route path="/discover" element={<Discover />} />
                 <Route path="/discover/*" element={<Discover />} />
+                <Route path="/super-vision" element={<Suspense fallback={<div />}><SuperVision /></Suspense>} />
                 <Route path="/analytics" element={<DeepAnalysis />} />
                 <Route path="/saved" element={<Saved />} />
                 <Route path="/ai-scripts-old" element={<AIScripts />} />
@@ -171,6 +177,9 @@ function DashboardLayout() {
                 <Route path="/data-deletion" element={<DataDeletion />} />
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/feedback" element={<Feedback />} />
+                <Route path="/projects" element={<Suspense fallback={<div className="animate-pulse p-8">Loading...</div>}><Projects /></Suspense>} />
+                <Route path="/projects/new" element={<Suspense fallback={<div className="animate-pulse p-8">Loading...</div>}><ProjectCreate /></Suspense>} />
+                <Route path="/projects/:id/edit" element={<Suspense fallback={<div className="animate-pulse p-8">Loading...</div>}><ProjectEdit /></Suspense>} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </div>
@@ -213,6 +222,7 @@ function App() {
           <BrowserRouter>
             <ThemeProvider>
               <AuthProvider>
+                <ProjectProvider>
                 <ChatProvider>
                   <WorkflowProvider>
                 {/* PWA Update Banner & Offline Notifications */}
@@ -246,6 +256,7 @@ function App() {
           </Routes>
           </WorkflowProvider>
                 </ChatProvider>
+                </ProjectProvider>
           </AuthProvider>
         </ThemeProvider>
 

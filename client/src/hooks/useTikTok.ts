@@ -228,9 +228,10 @@ export function useDashboard() {
   return { stats, loading, error };
 }
 
-export function useSearchWithFilters(filters: SearchFilters & { 
-  is_deep?: boolean; 
+export function useSearchWithFilters(filters: SearchFilters & {
+  is_deep?: boolean;
   user_tier?: string;
+  project_id?: number;
 }) {
   const [videos, setVideos] = useState<TikTokVideo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -261,6 +262,7 @@ export function useSearchWithFilters(filters: SearchFilters & {
         platform: filters.platform || 'tiktok',  // Multi-platform support
         is_deep: filters.is_deep || false,
         user_tier: filters.user_tier || 'pro',
+        ...(filters.project_id && { project_id: filters.project_id }),
       });
       
       setMode(result.mode || 'light');
@@ -361,7 +363,7 @@ export function useSearchWithFilters(filters: SearchFilters & {
     } finally {
       setLoading(false);
     }
-  }, [filters.niche, filters.sortBy, filters.dateRange, filters.minViews, filters.maxViews, filters.minDuration, filters.maxDuration, filters.is_deep, filters.user_tier, filters.platform]);
+  }, [filters.niche, filters.sortBy, filters.dateRange, filters.minViews, filters.maxViews, filters.minDuration, filters.maxDuration, filters.is_deep, filters.user_tier, filters.platform, filters.project_id]);
 
   // REMOVED auto-search on mount to prevent infinite loop
   // Users must click "Search" or "Apply Filters" button

@@ -43,6 +43,10 @@ class CompetitorCreate(BaseModel):
         default=None,
         description="Pre-fetched search data to avoid duplicate Apify call"
     )
+    project_id: Optional[int] = Field(
+        default=None,
+        description="Project ID to bind competitor to"
+    )
 
     @field_validator('username')
     @classmethod

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from ..core.database import get_db
-from ..db.models import User, ChatSession, ChatMessage
+from ..db.models import User, ChatSession, ChatMessage, Project
 from .dependencies import get_current_user, CreditManager
 
 router = APIRouter(tags=["Chat Sessions"])
@@ -247,6 +247,23 @@ class ChatMessageCreate(BaseModel):
     mode: Optional[str] = None
     model: Optional[str] = None
     language: Optional[str] = "English"
+    project_id: Optional[int] = None
+    context: Optional[str] = None  # Per-message context (from attachments/links)
+
+
+class ParseLinkRequest(BaseModel):
+    """Parse a video URL to extract metadata."""
+    url: str = Field(..., min_length=5, max_length=2000)
+
+
+class ParseLinkResponse(BaseModel):
+    """Parsed video metadata."""
+    platform: str
+    description: str
+    author: str
+    stats: dict
+    hashtags: list
+    music: Optional[str] = None
 
 
 class ChatMessageResponse(BaseModel):
@@ -677,10 +694,12 @@ async def send_message(
         role = "User" if msg.role == "user" else "Assistant"
         history_text += f"{role}: {msg.content}\n"
 
-    # Add context if available
+    # Add context if available (session-level + per-message)
     context_text = ""
     if session.context_data:
         context_text = f"\nCONTEXT: {session.context_data}\n"
+    if data.context:
+        context_text += f"\nATTACHED CONTENT:\n{data.context}\n"
 
     # Get mode-specific system prompt
     mode = data.mode or session.mode
@@ -702,6 +721,27 @@ async def send_message(
             full_system_prompt = f"IMPORTANT: You MUST respond entirely in {user_lang}. All text, headings, and content must be in {user_lang}.\n\n{full_system_prompt}"
         if context_text:
             full_system_prompt += f"\n{context_text}"
+
+        # Inject project context if project_id provided
+        if data.project_id:
+            project = db.query(Project).filter(
+                Project.id == data.project_id,
+                Project.user_id == current_user.id
+            ).first()
+            if project and project.profile_data:
+                p = project.profile_data
+                audience = p.get('audience', {})
+                audience_str = f"Age: {audience.get('age', 'any')}, Gender: {audience.get('gender', 'any')}, Interests: {', '.join(audience.get('interests', []))}" if isinstance(audience, dict) else str(audience)
+                project_context = f"""PROJECT CONTEXT (tailor ALL responses for this project):
+- Project: {project.name}
+- Niche: {p.get('niche', '')} ({p.get('sub_niche', '')})
+- Content format: {', '.join(p.get('format', []))}
+- Target audience: {audience_str}
+- Tone/style: {p.get('tone', '')}
+- Platforms: {', '.join(p.get('platforms', []))}
+- MUST AVOID: {', '.join(p.get('exclude', []))}
+"""
+                full_system_prompt = project_context + "\n" + full_system_prompt
 
         ai_response_text = await generate_ai_response(
             model=current_model,
@@ -772,3 +812,99 @@ async def send_message(
         ),
         credits=credits_info
     )
+
+
+# =============================================================================
+# PARSE LINK - Extract video metadata from URL
+# =============================================================================
+
+@router.post("/parse-link", response_model=ParseLinkResponse)
+async def parse_link(
+    data: ParseLinkRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Parse a TikTok/Instagram video URL and extract metadata.
+    Returns structured data for AI chat context injection.
+    Cost: 1 credit.
+    """
+    import re
+
+    # Check credits (1 credit for parse-link)
+    CreditManager.check_and_reset_monthly(current_user, db)
+    total_credits = (current_user.credits or 0) + (current_user.rollover_credits or 0) + (current_user.bonus_credits or 0)
+    if total_credits < 1:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={"message": "Insufficient credits for link parsing", "required": 1, "available": total_credits}
+        )
+
+    url = data.url.strip()
+
+    # Detect platform
+    platform = "unknown"
+    if "tiktok.com" in url:
+        platform = "tiktok"
+    elif "instagram.com" in url:
+        platform = "instagram"
+    elif "youtube.com" in url or "youtu.be" in url:
+        platform = "youtube"
+
+    # Use Apify to fetch video metadata
+    try:
+        from apify_client import ApifyClient
+        apify_token = os.getenv("APIFY_TOKEN")
+        if not apify_token:
+            raise HTTPException(status_code=500, detail="Apify token not configured")
+
+        client = ApifyClient(apify_token)
+
+        if platform == "tiktok":
+            run_input = {
+                "postURLs": [url],
+                "maxProfilesPerQuery": 1,
+                "resultsPerPage": 1,
+            }
+            run = client.actor("clockworks/free-tiktok-scraper").call(run_input=run_input, timeout_secs=30)
+            items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+
+            if not items:
+                raise HTTPException(status_code=404, detail="Could not fetch video data")
+
+            video = items[0]
+            description = video.get("text", "") or video.get("description", "")
+            author = video.get("authorMeta", {}).get("name", "") or video.get("author", "")
+            stats = {
+                "views": video.get("playCount", 0) or video.get("videoMeta", {}).get("playCount", 0),
+                "likes": video.get("diggCount", 0) or video.get("likesCount", 0),
+                "comments": video.get("commentCount", 0),
+                "shares": video.get("shareCount", 0),
+            }
+            hashtags = [h.get("name", "") for h in video.get("hashtags", [])]
+            music = video.get("musicMeta", {}).get("musicName", "")
+        else:
+            # For non-TikTok, return basic info from URL
+            description = f"Video from {platform}: {url}"
+            author = ""
+            stats = {"views": 0, "likes": 0, "comments": 0}
+            hashtags = []
+            music = None
+
+        # Deduct 1 credit
+        await CreditManager.deduct_credits(1, current_user, db)
+
+        return ParseLinkResponse(
+            platform=platform,
+            description=description,
+            author=author,
+            stats=stats,
+            hashtags=hashtags,
+            music=music
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ParseLink] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse link: {str(e)}")

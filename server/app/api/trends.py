@@ -8,6 +8,7 @@ Enterprise-grade endpoints with:
 - Proper authentication via JWT
 - Input validation and sanitization
 """
+import os
 import time
 import logging
 from datetime import datetime, timedelta
@@ -18,7 +19,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, delete
 
 from ..core.database import get_db
-from ..db.models import Trend, User, UserSearch, SearchMode as DBSearchMode
+from ..db.models import Trend, User, UserSearch, SearchMode as DBSearchMode, Project
 from ..services.collector import TikTokCollector
 from ..services.instagram_collector import InstagramCollector
 from ..services.instagram_adapter import adapt_instagram_to_standard
@@ -424,36 +425,9 @@ def search_trends(
     # ==========================================================================
     if not req.is_deep and req.mode != SearchMode.USERNAME:
         limit = 20
-        try:
-            # Check cache in database (USER ISOLATED)
-            clean_nick = search_targets[0].lower().strip().replace("@", "")
-            search_term = f"%{clean_nick}%"
-            cached_results = db.query(Trend).filter(
-                Trend.user_id == current_user.id,  # USER ISOLATION
-                or_(
-                    Trend.description.ilike(search_term),
-                    Trend.vertical.ilike(search_term)
-                )
-            ).order_by(Trend.uts_score.desc()).limit(limit).all()
-        except Exception as e:
-            logger.error(f"Error querying cache: {e}")
-            cached_results = []
 
-        # Use fresh cache (< 1 hour)
-        if cached_results:
-            recent_cached = [
-                t for t in cached_results
-                if not t.last_scanned_at or
-                (datetime.utcnow() - t.last_scanned_at) < timedelta(hours=1)
-            ]
-            if recent_cached:
-                execution_time = int((time.time() - start_time) * 1000)
-                log_search(db, current_user.id, search_targets[0], req.mode.value, False, len(recent_cached), execution_time)
-                logger.info(f"[CACHE] [LIGHT] Using cache ({len(recent_cached)} items)")
-                return {"status": "ok", "mode": "light", "items": [trend_to_dict(t) for t in recent_cached]}
-
-        # No cache - fetch from Apify
-        logger.info(f"[REFRESH] [LIGHT] No cache, fetching from Apify...")
+        # Always fetch fresh data from Apify
+        logger.info(f"[FRESH] [LIGHT] Fetching from Apify...")
         raw_items = collector.collect(search_targets, limit=limit, mode="search", is_deep=False)
 
         if not raw_items:
@@ -563,6 +537,44 @@ def search_trends(
                 "viralScore": round(simple_viral_score, 1),
                 "engagementRate": engagement_rate
             })
+
+        # Smart search: project-based filtering
+        logger.info(f"[SMART] project_id={req.project_id}, live_results={len(live_results)}")
+        if req.project_id and live_results:
+            project = db.query(Project).filter(
+                Project.id == req.project_id,
+                Project.user_id == current_user.id
+            ).first()
+            if project and project.profile_data:
+                try:
+                    from ..services.project_filter import metadata_prefilter, batch_ai_score
+                    from google import genai
+
+                    # Step 1: metadata pre-filter (free, instant)
+                    passed, rejected = metadata_prefilter(live_results, project.profile_data)
+                    logger.info(f"[SMART] Metadata filter: {len(passed)} passed, {len(rejected)} rejected")
+
+                    # Step 2: batch AI scoring (costs credits)
+                    if passed:
+                        cost = 2  # project_search cost
+                        if current_user.credits >= cost:
+                            gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_GENAI_API_KEY")
+                            gemini_client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
+                            if gemini_client:
+                                current_user.credits -= cost
+                                db.commit()
+                                scored = batch_ai_score(passed, project.profile_data, gemini_client, project.id, db)
+                                live_results = [v for v in scored if v.get('relevance_score', 0) > 40]
+                                live_results.sort(key=lambda v: v.get('relevance_score', 0), reverse=True)
+                                logger.info(f"[SMART] AI scoring: {len(live_results)} results above threshold")
+                            else:
+                                live_results = passed
+                        else:
+                            live_results = passed
+                            logger.info("[SMART] Not enough credits for AI scoring, using metadata filter only")
+                except Exception as e:
+                    logger.error(f"[SMART] Project filter error: {e}")
+                    # Fallback: return unfiltered results
 
         execution_time = int((time.time() - start_time) * 1000)
         log_search(db, current_user.id, search_targets[0], req.mode.value, False, len(live_results), execution_time)

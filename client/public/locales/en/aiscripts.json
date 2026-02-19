@@ -1,35 +1,25 @@
 {
-  "pageTitle": "AI Scripts",
-  "pageDescription": "Your generated viral scripts and content ideas",
-  "generateNewScript": "Generate New Script",
-  "generateScript": "Generate Script",
-
-  "statsTotal": "Total Scripts",
-  "statsFavorites": "Favorites",
-  "statsUsedThisWeek": "Used This Week",
-  "statsAvgDuration": "Avg Duration (s)",
-
-  "nichesAll": "All Scripts",
-  "nichesEntertainment": "Entertainment",
-  "nichesEducation": "Education",
-  "nichesLifestyle": "Lifestyle",
-  "nichesBusiness": "Business",
-
-  "emptyTitle": "No scripts yet",
-  "emptyDescription": "Generate your first AI script from a trending video",
-
-  "previewTitle": "Script Preview",
-  "previewPlaceholder": "Select a script to view details",
-  "hookLabel": "Hook (First 3 seconds)",
-  "bodyLabel": "Body",
-  "ctaLabel": "Call to Action",
-  "tipsLabel": "Pro Tips",
+  "pageTitle": "AI Video Analysis",
+  "pageDescription": "AI-powered video analysis with Gemini Vision",
 
   "copied": "Copied!",
   "copy": "Copy",
 
-  "timeAgoSeconds": "{{count}}s ago",
-  "timeAgoMinutes": "{{count}}m ago",
-  "timeAgoHours": "{{count}}h ago",
-  "timeAgoDays": "{{count}}d ago"
+  "analysis": {
+    "title": "AI Video Analysis",
+    "subtitle": "Deep analysis using Google Gemini Vision",
+    "credits": "credits",
+    "emptyDescription": "Open any video and click \"AI Analysis\" to get detailed AI-powered insights",
+    "goToDiscover": "Go to Discover",
+    "analyzing": "Analyzing video...",
+    "analyzingDesc": "Gemini Vision is downloading, watching, and deeply analyzing the video content — visuals, audio, hooks, pacing, and viral mechanics.",
+    "analyzingWait": "This may take up to 2 minutes",
+    "resultTitle": "Analysis Complete",
+    "download": "Download",
+    "reanalyze": "Re-analyze",
+    "errorTitle": "Analysis Failed",
+    "error": "Something went wrong. Please try again.",
+    "insufficientCredits": "Not enough credits. Video analysis costs 3 credits.",
+    "retry": "Try Again"
+  }
 }

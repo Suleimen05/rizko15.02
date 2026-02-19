@@ -280,6 +280,7 @@ class ApiService {
     user_tier?: string;
     time_window?: string;
     rescan_hours?: number;
+    project_id?: number;
   }): Promise<{
     status: string;
     items: Trend[];
@@ -296,6 +297,7 @@ class ApiService {
       user_tier: params.user_tier || 'free',
       time_window: params.time_window,
       rescan_hours: params.rescan_hours || 24,
+      ...(params.project_id && { project_id: params.project_id }),
     });
     return response.data;
   }
@@ -361,6 +363,7 @@ class ApiService {
     page?: number;
     per_page?: number;
     tag?: string;
+    project_id?: number;
   }): Promise<{
     items: any[];
     total: number;
@@ -380,6 +383,7 @@ class ApiService {
     trend_id: number;
     notes?: string;
     tags?: string[];
+    project_id?: number;
   }): Promise<any> {
     const response = await apiClient.post('/favorites/', data);
     return response.data;
@@ -432,6 +436,7 @@ class ApiService {
     viral_score?: number;
     notes?: string;
     tags?: string[];
+    project_id?: number;
   }): Promise<{ id: number; trend_id: number; message: string }> {
     const response = await apiClient.post('/favorites/save-video', data);
     return response.data;
@@ -458,6 +463,7 @@ class ApiService {
     page?: number;
     per_page?: number;
     is_active?: boolean;
+    project_id?: number;
   }): Promise<{
     items: any[];
     total: number;
@@ -477,6 +483,7 @@ class ApiService {
     username: string;
     notes?: string;
     tags?: string[];
+    project_id?: number;
   }): Promise<any> {
     const response = await apiClient.post('/competitors/', data);
     return response.data;
@@ -624,6 +631,7 @@ class ApiService {
     model?: string;
     mode?: string;
     language?: string;
+    project_id?: number;
   }): Promise<{ response: string; credits_used: number; model_used: string }> {
     const response = await apiClient.post('/ai-scripts/chat', {
       message: params.message,
@@ -632,6 +640,7 @@ class ApiService {
       model: params.model || 'gemini',
       mode: params.mode || 'chat',
       language: params.language || 'English',
+      ...(params.project_id && { project_id: params.project_id }),
     });
     return response.data;
   }
@@ -733,10 +742,26 @@ class ApiService {
    */
   async sendChatMessage(
     sessionId: string,
-    data: { message: string; mode?: string; model?: string; language?: string },
+    data: { message: string; mode?: string; model?: string; language?: string; project_id?: number; context?: string },
     signal?: AbortSignal
   ): Promise<any> {
     const response = await apiClient.post(`/chat-sessions/${sessionId}/messages`, data, { signal });
+    return response.data;
+  }
+
+  /**
+   * Parse a video URL to extract metadata
+   * POST /api/chat-sessions/parse-link
+   */
+  async parseLink(url: string): Promise<{
+    platform: string;
+    description: string;
+    author: string;
+    stats: { views: number; likes: number; comments: number; shares?: number };
+    hashtags: string[];
+    music?: string;
+  }> {
+    const response = await apiClient.post('/chat-sessions/parse-link', { url });
     return response.data;
   }
 
@@ -820,6 +845,7 @@ class ApiService {
     node_configs?: Record<string, any>;
     workflow_id?: number;
     language?: string;
+    project_id?: number;
   }): Promise<any> {
     const response = await apiClient.post('/workflows/execute', data, {
       timeout: 300000, // 5 minutes for long workflows
@@ -832,8 +858,12 @@ class ApiService {
    * POST /api/workflows/analyze-video
    */
   async analyzeVideo(data: {
-    video_url: string;
-    video_metadata?: any;
+    url: string;
+    platform?: string;
+    author?: string;
+    views?: string;
+    uts?: number;
+    desc?: string;
     custom_prompt?: string;
   }): Promise<any> {
     const response = await apiClient.post('/workflows/analyze-video', data, {
@@ -923,6 +953,59 @@ class ApiService {
    */
   async clearWorkflowHistory(): Promise<void> {
     await apiClient.delete('/workflows/history/clear');
+  }
+
+  // ===========================================================================
+  // PROJECTS API
+  // ===========================================================================
+
+  async getProjects(statusFilter?: string): Promise<any[]> {
+    const response = await apiClient.get('/projects/', {
+      params: statusFilter ? { status_filter: statusFilter } : undefined,
+    });
+    return response.data;
+  }
+
+  async createProject(data: { name: string; icon?: string }): Promise<any> {
+    const response = await apiClient.post('/projects/', data);
+    return response.data;
+  }
+
+  async getProject(id: number): Promise<any> {
+    const response = await apiClient.get(`/projects/${id}`);
+    return response.data;
+  }
+
+  async updateProject(id: number, data: {
+    name?: string;
+    icon?: string;
+    status?: string;
+    profile_data?: any;
+  }): Promise<any> {
+    const response = await apiClient.patch(`/projects/${id}`, data);
+    return response.data;
+  }
+
+  async deleteProject(id: number): Promise<void> {
+    await apiClient.delete(`/projects/${id}`);
+  }
+
+  async generateProjectProfile(id: number, data: {
+    form_data: Record<string, any>;
+    description_text: string;
+  }): Promise<any> {
+    const response = await apiClient.post(`/projects/${id}/generate-profile`, data);
+    return response.data;
+  }
+
+  async transcribeProjectAudio(id: number, audioBlob: Blob): Promise<{ text: string }> {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+    const response = await apiClient.post(`/projects/${id}/transcribe`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+    return response.data;
   }
 
   // ===========================================================================
@@ -1316,6 +1399,82 @@ class ApiService {
       topPerformingNiche: 'Entertainment',
       weeklyGrowth: 15.3,
     };
+  }
+
+  // ===========================================================================
+  // SUPER VISION API
+  // ===========================================================================
+
+  async getSuperVisionConfig(projectId: number): Promise<any> {
+    try {
+      const response = await apiClient.get(`/super-vision/config/${projectId}`);
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) return null;
+      throw error;
+    }
+  }
+
+  async createSuperVisionConfig(data: {
+    project_id: number;
+    min_views?: number;
+    date_range_days?: number;
+    scan_interval_hours?: number;
+    max_vision_videos?: number;
+    custom_keywords?: string[];
+    text_score_threshold?: number;
+  }): Promise<any> {
+    const response = await apiClient.post('/super-vision/config', data);
+    return response.data;
+  }
+
+  async updateSuperVisionConfig(projectId: number, data: Record<string, any>): Promise<any> {
+    const response = await apiClient.patch(`/super-vision/config/${projectId}`, data);
+    return response.data;
+  }
+
+  async deleteSuperVisionConfig(projectId: number): Promise<void> {
+    await apiClient.delete(`/super-vision/config/${projectId}`);
+  }
+
+  async activateSuperVision(projectId: number): Promise<any> {
+    const response = await apiClient.post(`/super-vision/config/${projectId}/activate`);
+    return response.data;
+  }
+
+  async pauseSuperVision(projectId: number): Promise<any> {
+    const response = await apiClient.post(`/super-vision/config/${projectId}/pause`);
+    return response.data;
+  }
+
+  async triggerSuperVisionScan(projectId: number): Promise<any> {
+    const response = await apiClient.post(`/super-vision/config/${projectId}/trigger`, {}, {
+      timeout: 300000,
+    });
+    return response.data;
+  }
+
+  async getSuperVisionResults(projectId: number, params?: {
+    page?: number;
+    per_page?: number;
+    sort_by?: string;
+    include_dismissed?: boolean;
+  }): Promise<any> {
+    const response = await apiClient.get(`/super-vision/results/${projectId}`, { params });
+    return response.data;
+  }
+
+  async dismissSuperVisionResult(resultId: number): Promise<void> {
+    await apiClient.post(`/super-vision/results/${resultId}/dismiss`);
+  }
+
+  async saveSuperVisionResult(resultId: number): Promise<void> {
+    await apiClient.post(`/super-vision/results/${resultId}/save`);
+  }
+
+  async getSuperVisionStatus(): Promise<any[]> {
+    const response = await apiClient.get('/super-vision/status');
+    return response.data;
   }
 }
 

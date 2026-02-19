@@ -28,11 +28,13 @@ import { DeepAnalyzeProgress } from '@/components/DeepAnalyzeProgress';
 import { UTSBreakdown } from '@/components/metrics/UTSBreakdown';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProject } from '@/contexts/ProjectContext';
 import type { TikTokVideo, TikTokVideoDeep } from '@/types';
 
 export function DeepAnalysis() {
   const { t } = useTranslation('deepanalysis');
   const { user } = useAuth();
+  const { activeProject } = useProject();
   const [keyword, setKeyword] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
@@ -43,6 +45,7 @@ export function DeepAnalysis() {
     niche: keyword,
     is_deep: true,
     user_tier: user?.subscription || 'free',
+    ...(activeProject?.id && { project_id: activeProject.id }),
   });
 
   const handleDeepAnalyze = async () => {

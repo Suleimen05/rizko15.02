@@ -32,6 +32,7 @@ import { ComingSoonModal } from '@/components/ComingSoonModal';
 import { features, REVIEW_MODE } from '@/config/features';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '@/hooks/useLanguage';
+import { ProjectSwitcher } from '@/components/ProjectSwitcher';
 
 interface UnifiedSidebarProps {
   variant: 'A' | 'B';
@@ -230,9 +231,10 @@ export function UnifiedSidebar({ variant }: UnifiedSidebarProps) {
         {activeTab === 'trends' ? (
           // TRENDS TAB
           <div className="p-2">
+            <ProjectSwitcher />
             {variant === 'A' ? (
               // Variant A: Navigation menu
-              <nav className="space-y-1">
+              <nav className="space-y-1 mt-2">
                 {getTrendsNavItems().map((item) => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.href;

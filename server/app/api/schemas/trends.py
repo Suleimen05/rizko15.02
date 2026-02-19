@@ -85,6 +85,10 @@ class SearchRequest(BaseModel):
         le=168,
         description="Hours until auto-rescan (1-168)"
     )
+    project_id: Optional[int] = Field(
+        default=None,
+        description="Project ID for smart search filtering"
+    )
 
     @field_validator('target')
     @classmethod

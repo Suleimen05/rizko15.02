@@ -296,6 +296,39 @@ export interface Notification {
   actionUrl?: string;
 }
 
+// ===================  PROJECT TYPES ====================
+
+export interface ProjectProfile {
+  niche: string;
+  sub_niche: string;
+  format: string[];
+  audience: {
+    age: string;
+    gender: string;
+    interests: string[];
+    level: string;
+  };
+  tone: string;
+  platforms: string[];
+  exclude: string[];
+  reference_accounts: string[];
+  keywords: string[];
+  anti_keywords: string[];
+}
+
+export interface Project {
+  id: number;
+  name: string;
+  icon?: string;
+  status: 'active' | 'archived';
+  profile_data: ProjectProfile;
+  raw_input: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+  competitors_count: number;
+  favorites_count: number;
+}
+
 // AI Chat Types
 export interface ChatMessage {
   id: string;
@@ -328,7 +361,7 @@ export interface QuickAction {
   description: string;
   icon: string;
   prompt: string;
-  category: 'script' | 'ideas' | 'analysis' | 'improvement';
+  category: 'script' | 'ideas' | 'analysis' | 'improvement' | 'hook' | 'chat';
 }
 
 export interface PromptTemplate {
@@ -521,4 +554,68 @@ export interface ChatCreditsInfo {
   monthly_limit: number;
   tier: string;
   model_costs?: Record<string, number>;
+}
+
+// =============================================================================
+// SUPER VISION
+// =============================================================================
+
+export interface SuperVisionConfig {
+  id: number;
+  project_id: number;
+  status: 'active' | 'paused' | 'error';
+  min_views: number;
+  date_range_days: number;
+  platform: string;
+  scan_interval_hours: number;
+  max_vision_videos: number;
+  custom_keywords: string[];
+  text_score_threshold: number;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  last_run_status: string | null;
+  last_run_stats: {
+    scraped?: number;
+    after_views_filter?: number;
+    after_metadata?: number;
+    after_ai_text?: number;
+    vision_analyzed?: number;
+    final_results?: number;
+    credits_used?: number;
+    duration_seconds?: number;
+  };
+  consecutive_errors: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  // From status endpoint
+  project_name?: string;
+  project_icon?: string | null;
+  results_count?: number;
+}
+
+export interface SuperVisionResult {
+  id: number;
+  video_platform_id: string;
+  video_url: string;
+  video_cover_url: string | null;
+  video_play_addr: string | null;
+  video_description: string | null;
+  video_author: string | null;
+  video_stats: {
+    playCount: number;
+    diggCount: number;
+    commentCount: number;
+    shareCount: number;
+  };
+  text_score: number;
+  text_reason: string | null;
+  vision_score: number | null;
+  vision_analysis: string | null;
+  vision_match_reason: string | null;
+  final_score: number;
+  scan_batch_id: string;
+  is_dismissed: boolean;
+  is_saved: boolean;
+  found_at: string;
 }

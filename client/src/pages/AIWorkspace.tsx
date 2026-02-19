@@ -13,18 +13,48 @@ import {
   ChevronDown,
   Mic,
   Hash,
+  Link,
+  Loader2,
   Check,
   X,
   ZoomIn,
   ZoomOut,
+  Plus,
+  Pin,
+  PinOff,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+  MessageSquare,
+  PanelLeftClose,
+  PanelLeft,
+  StopCircle,
+  Coins,
+  Target,
+  MessageCircle,
+  FolderOpen,
+  ArrowLeft,
+  Bookmark,
+  Eye,
+  Heart,
+  Share2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import type { ChatMessage, QuickAction } from '@/types';
+import type { QuickAction } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useChat } from '@/contexts/ChatContext';
+import { useProject } from '@/contexts/ProjectContext';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { apiService } from '@/services/api';
+import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+// =============================================================================
+// QUICK ACTIONS & MODES
+// =============================================================================
 
 const getQuickActions = (t: (key: string) => string): QuickAction[] => [
   {
@@ -59,6 +89,22 @@ const getQuickActions = (t: (key: string) => string): QuickAction[] => [
     prompt: t('prompts.improveScript'),
     category: 'improvement',
   },
+  {
+    id: '5',
+    title: t('quickActions.hookCreator.title'),
+    description: t('quickActions.hookCreator.description'),
+    icon: 'Target',
+    prompt: t('prompts.hookCreator'),
+    category: 'hook',
+  },
+  {
+    id: '6',
+    title: t('quickActions.freeChat.title'),
+    description: t('quickActions.freeChat.description'),
+    icon: 'MessageCircle',
+    prompt: t('prompts.freeChat'),
+    category: 'chat',
+  },
 ];
 
 const getContentModes = (t: (key: string) => string) => [
@@ -70,7 +116,10 @@ const getContentModes = (t: (key: string) => string) => [
   { id: 'hook', name: t('modes.hook'), icon: '\u{1F3AF}' },
 ];
 
-// SVG Icon Components for AI Models
+// =============================================================================
+// SVG ICON COMPONENTS
+// =============================================================================
+
 const ClaudeIcon = () => (
   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="#D97757">
     <path d="M12 2L13.09 8.26L18 6L14.74 10.91L21 12L14.74 13.09L18 18L13.09 15.74L12 22L10.91 15.74L6 18L9.26 13.09L3 12L9.26 10.91L6 6L10.91 8.26L12 2Z"/>
@@ -96,20 +145,6 @@ const GeminiIcon = () => (
   </svg>
 );
 
-const GrokIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-    <path d="M15.5 8.5L12 12l-3.5-3.5L7 10l5 5 5-5-1.5-1.5z"/>
-  </svg>
-);
-
-const KimiIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="#000">
-    <rect x="4" y="4" width="16" height="16" rx="4" fill="#1D1D1F"/>
-    <text x="12" y="16" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">K</text>
-  </svg>
-);
-
 const NanoBanaIcon = () => (
   <svg viewBox="0 0 24 24" className="h-4 w-4">
     <defs>
@@ -126,33 +161,410 @@ const NanoBanaIcon = () => (
   </svg>
 );
 
-// AI Models - only Gemini is active, others coming soon
+// AI Models
 const aiModels = [
   { id: 'gemini', name: 'Gemini 2.5', icon: GeminiIcon, available: true },
   { id: 'nano-bana', name: 'Nano Bana', icon: NanoBanaIcon, available: true, isImageGen: true },
-  { id: 'claude', name: 'Sonnet 4.5', icon: ClaudeIcon, available: false, comingSoon: true },
-  { id: 'gpt4', name: 'GPT-5.1', icon: GPTIcon, available: false, comingSoon: true },
-  { id: 'grok', name: 'Grok 4', icon: GrokIcon, available: false, comingSoon: true },
-  { id: 'kimi', name: 'Kimi', icon: KimiIcon, available: false, comingSoon: true },
+  { id: 'claude', name: 'Claude 4', icon: ClaudeIcon, available: true },
+  { id: 'gpt4', name: 'GPT-4o', icon: GPTIcon, available: true },
 ];
 
-export function AIWorkspace() {
-  const { user, getAccessToken } = useAuth();
+// =============================================================================
+// CHAT SIDEBAR COMPONENT
+// =============================================================================
+
+interface ChatSidebarProps {
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+function ChatSidebar({ isOpen, onToggle }: ChatSidebarProps) {
   const { t } = useTranslation('aiworkspace');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const {
+    sessions,
+    currentSessionId,
+    selectSession,
+    deleteSession,
+    renameSession,
+    pinSession,
+    clearMessages,
+  } = useChat();
+  const [contextMenu, setContextMenu] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  const pinnedSessions = sessions.filter((s) => s.is_pinned);
+  const recentSessions = sessions.filter((s) => !s.is_pinned);
+
+  const handleNewChat = () => {
+    clearMessages();
+  };
+
+  const handleRenameStart = (sessionId: string, currentTitle: string) => {
+    setRenamingId(sessionId);
+    setRenameValue(currentTitle);
+    setContextMenu(null);
+  };
+
+  const handleRenameSubmit = (sessionId: string) => {
+    if (renameValue.trim()) {
+      renameSession(sessionId, renameValue.trim());
+    }
+    setRenamingId(null);
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return t('sidebar.today');
+    if (diffDays === 1) return t('sidebar.yesterday');
+    if (diffDays < 7) return t('sidebar.daysAgo', { count: diffDays });
+    return date.toLocaleDateString();
+  };
+
+  if (!isOpen) {
+    return (
+      <div className="w-12 border-r border-border bg-card/50 flex flex-col items-center py-3 gap-2">
+        <button
+          onClick={onToggle}
+          className="p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+          title={t('sidebar.openSidebar')}
+        >
+          <PanelLeft className="h-4 w-4" />
+        </button>
+        <button
+          onClick={handleNewChat}
+          className="p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+          title={t('sidebar.newChat')}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-64 border-r border-border bg-card/50 flex flex-col h-full">
+      {/* Header */}
+      <div className="p-3 flex items-center justify-between border-b border-border/50">
+        <button
+          onClick={handleNewChat}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium flex-1 mr-2"
+        >
+          <Plus className="h-4 w-4" />
+          {t('sidebar.newChat')}
+        </button>
+        <button
+          onClick={onToggle}
+          className="p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+        >
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Sessions list */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Pinned */}
+        {pinnedSessions.length > 0 && (
+          <div className="px-2 pt-3">
+            <div className="px-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <Pin className="h-3 w-3 inline mr-1" />
+              {t('sidebar.pinned')}
+            </div>
+            {pinnedSessions.map((session) => (
+              <SessionItem
+                key={session.session_id}
+                session={session}
+                isActive={currentSessionId === session.session_id}
+                isRenaming={renamingId === session.session_id}
+                renameValue={renameValue}
+                onRenameChange={setRenameValue}
+                onRenameSubmit={handleRenameSubmit}
+                onSelect={selectSession}
+                contextMenuOpen={contextMenu === session.session_id}
+                onContextMenu={(id) => setContextMenu(contextMenu === id ? null : id)}
+                onRename={handleRenameStart}
+                onPin={pinSession}
+                onDelete={deleteSession}
+                formatDate={formatDate}
+                t={t}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Recent */}
+        {recentSessions.length > 0 && (
+          <div className="px-2 pt-3">
+            {pinnedSessions.length > 0 && (
+              <div className="px-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {t('sidebar.recent')}
+              </div>
+            )}
+            {recentSessions.map((session) => (
+              <SessionItem
+                key={session.session_id}
+                session={session}
+                isActive={currentSessionId === session.session_id}
+                isRenaming={renamingId === session.session_id}
+                renameValue={renameValue}
+                onRenameChange={setRenameValue}
+                onRenameSubmit={handleRenameSubmit}
+                onSelect={selectSession}
+                contextMenuOpen={contextMenu === session.session_id}
+                onContextMenu={(id) => setContextMenu(contextMenu === id ? null : id)}
+                onRename={handleRenameStart}
+                onPin={pinSession}
+                onDelete={deleteSession}
+                formatDate={formatDate}
+                t={t}
+              />
+            ))}
+          </div>
+        )}
+
+        {sessions.length === 0 && (
+          <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+            <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            {t('sidebar.noSessions')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Session item subcomponent
+interface SessionItemProps {
+  session: { session_id: string; title: string; is_pinned: boolean; updated_at: string; message_count: number; model: string };
+  isActive: boolean;
+  isRenaming: boolean;
+  renameValue: string;
+  onRenameChange: (v: string) => void;
+  onRenameSubmit: (id: string) => void;
+  onSelect: (id: string) => void;
+  contextMenuOpen: boolean;
+  onContextMenu: (id: string) => void;
+  onRename: (id: string, title: string) => void;
+  onPin: (id: string, pinned: boolean) => void;
+  onDelete: (id: string) => void;
+  formatDate: (d: string) => string;
+  t: (key: string) => string;
+}
+
+function SessionItem({
+  session,
+  isActive,
+  isRenaming,
+  renameValue,
+  onRenameChange,
+  onRenameSubmit,
+  onSelect,
+  contextMenuOpen,
+  onContextMenu,
+  onRename,
+  onPin,
+  onDelete,
+  formatDate,
+  t,
+}: SessionItemProps) {
+  return (
+    <div className="relative group">
+      <button
+        onClick={() => !isRenaming && onSelect(session.session_id)}
+        className={cn(
+          'w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors mb-0.5',
+          isActive
+            ? 'bg-accent text-foreground'
+            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+        )}
+      >
+        {isRenaming ? (
+          <input
+            autoFocus
+            value={renameValue}
+            onChange={(e) => onRenameChange(e.target.value)}
+            onBlur={() => onRenameSubmit(session.session_id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onRenameSubmit(session.session_id);
+              if (e.key === 'Escape') onRenameSubmit(session.session_id);
+            }}
+            className="w-full bg-transparent border-b border-primary focus:outline-none text-sm"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <>
+            <div className="flex items-center gap-2 pr-6">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center flex-shrink-0">
+                <MessageSquare className="h-3.5 w-3.5 text-purple-400" />
+              </div>
+              <span className="truncate font-medium text-[13px]">{session.title}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1 pl-9">
+              <span className="text-[10px] text-muted-foreground/60">
+                {formatDate(session.updated_at)}
+              </span>
+            </div>
+          </>
+        )}
+      </button>
+
+      {/* Context menu button */}
+      {!isRenaming && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onContextMenu(session.session_id);
+          }}
+          className={cn(
+            'absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded transition-opacity',
+            contextMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+            'hover:bg-accent'
+          )}
+        >
+          <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+      )}
+
+      {/* Context menu dropdown */}
+      {contextMenuOpen && (
+        <div className="absolute right-0 top-full mt-1 w-36 bg-popover border border-border rounded-lg shadow-xl py-1 z-50">
+          <button
+            onClick={() => onRename(session.session_id, session.title)}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            {t('sidebar.rename')}
+          </button>
+          <button
+            onClick={() => {
+              onPin(session.session_id, !session.is_pinned);
+              onContextMenu(session.session_id);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+          >
+            {session.is_pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+            {session.is_pinned ? t('sidebar.unpin') : t('sidebar.pin')}
+          </button>
+          <button
+            onClick={() => {
+              onDelete(session.session_id);
+              onContextMenu(session.session_id);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {t('sidebar.delete')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
+
+// Video context type from navigation
+interface VideoContextData {
+  url: string;
+  description: string;
+  author: string;
+  cover: string;
+  stats: { playCount: number; diggCount: number; commentCount: number; shareCount: number };
+  uts_score: number;
+  play_addr?: string;
+}
+
+interface SavedVideoItem {
+  id: number;
+  trend: {
+    description: string;
+    author_username: string;
+    cover_url: string;
+    stats: { playCount: number; diggCount: number; commentCount: number; shareCount: number };
+    uts_score: number;
+    url: string;
+  };
+}
+
+export function AIWorkspace() {
+  const { user } = useAuth();
+  const { activeProject } = useProject();
+  const { t } = useTranslation('aiworkspace');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const {
+    messages,
+    isStreaming,
+    isLoading,
+    credits,
+    currentModel,
+    currentMode,
+    sendMessage,
+    stopGeneration,
+    setCurrentModel,
+    setCurrentMode,
+  } = useChat();
+
   const [inputValue, setInputValue] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(aiModels.find(m => m.id === 'gemini') || aiModels[0]);
-  const contentModes = getContentModes(t);
-  const [selectedMode, setSelectedMode] = useState(contentModes[0]);
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [lightboxZoom, setLightboxZoom] = useState(1);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkParsing, setLinkParsing] = useState(false);
+  const [parsedContext, setParsedContext] = useState<string | null>(null);
+  const [showHashMenu, setShowHashMenu] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [videoContext, setVideoContext] = useState<VideoContextData | null>(null);
+  const [showSavedPicker, setShowSavedPicker] = useState(false);
+  const [savedVideos, setSavedVideos] = useState<SavedVideoItem[]>([]);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const [aiVisionEnabled, setAiVisionEnabled] = useState(false);
+  const [visionLoading, setVisionLoading] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<{
+    content: string;
+    videoContext?: VideoContextData | null;
+  } | null>(null);
+  const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const videoContextProcessed = useRef(false);
 
+  const contentModes = getContentModes(t);
   const quickActions = getQuickActions(t);
-  const popularPrompts = t('popularPrompts.items', { returnObjects: true }) as string[];
+
+  // Accept video context from navigation (e.g. from VideoCard "AI Analysis")
+  useEffect(() => {
+    const state = location.state as { videoContext?: VideoContextData } | null;
+    if (state?.videoContext && !videoContextProcessed.current) {
+      videoContextProcessed.current = true;
+      const vc = state.videoContext;
+      setVideoContext(vc);
+
+      // Build context string from video data
+      const ctx = [
+        `Video by @${vc.author}`,
+        vc.description,
+        `Views: ${vc.stats.playCount?.toLocaleString()} | Likes: ${vc.stats.diggCount?.toLocaleString()} | Comments: ${vc.stats.commentCount?.toLocaleString()} | Shares: ${vc.stats.shareCount?.toLocaleString()}`,
+        vc.uts_score > 0 ? `UTS Score: ${vc.uts_score}` : '',
+        vc.url ? `URL: ${vc.url}` : '',
+      ].filter(Boolean).join('\n');
+      setParsedContext(ctx);
+
+      // Clear location state to avoid re-processing on re-renders
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  const selectedModel = aiModels.find((m) => m.id === currentModel) || aiModels[0];
+  const selectedMode = contentModes.find((m) => m.id === currentMode) || contentModes[0];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -160,8 +572,23 @@ export function AIWorkspace() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, pendingMessage]);
 
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClick = () => {
+      setShowModelMenu(false);
+      setShowModeMenu(false);
+      setShowHashMenu(false);
+      setShowSavedPicker(false);
+    };
+    if (showModelMenu || showModeMenu || showHashMenu || showSavedPicker) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [showModelMenu, showModeMenu, showHashMenu]);
+
+  // Image helpers
   const resolveImageSrc = useCallback((src?: string) => {
     if (!src) return '';
     if (src.startsWith('/uploads')) {
@@ -173,7 +600,6 @@ export function AIWorkspace() {
     return src;
   }, []);
 
-  // Extract image URLs from markdown content
   const extractImageUrls = useCallback((content: string): string[] => {
     const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
     const urls: string[] = [];
@@ -219,103 +645,280 @@ export function AIWorkspace() {
     setLightboxZoom(1);
   }, []);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isStreaming) return;
+  // Build display message that includes video card marker (rendered as visual card)
+  const buildDisplayMessage = (msg: string, vc: VideoContextData | null): string => {
+    if (!vc) return msg;
+    const cardData = JSON.stringify({
+      author: vc.author,
+      description: vc.description?.substring(0, 120) || '',
+      cover: vc.cover || '',
+      stats: vc.stats,
+      uts_score: vc.uts_score || 0,
+    });
+    return `<!--videocard:${cardData}-->\n${msg}`;
+  };
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: inputValue,
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    const currentInput = inputValue;
-    setInputValue('');
-    setIsStreaming(true);
-
+  // Parse video card data from message content
+  const parseVideoCard = (content: string): { videoData: VideoContextData | null; text: string } => {
+    const match = content.match(/^<!--videocard:(.*?)-->\n?/);
+    if (!match) return { videoData: null, text: content };
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-      const token = await getAccessToken();
-      const response = await fetch(`${API_URL}/ai-scripts/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          message: currentInput,
-          model: selectedModel.id,
-          mode: selectedMode.id,
-          history: messages.slice(-10).map(m => ({
-            role: m.role,
-            content: m.content
-          }))
-        }),
-      });
+      const data = JSON.parse(match[1]);
+      return { videoData: data, text: content.slice(match[0].length) };
+    } catch {
+      return { videoData: null, text: content };
+    }
+  };
 
-      if (!response.ok) {
-        throw new Error('Failed to get response');
+  // Send message via ChatContext
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isStreaming || visionLoading) return;
+    const msg = inputValue;
+    let ctx = parsedContext || undefined;
+    const currentVideoCtx = videoContext;
+    const visionEnabled = aiVisionEnabled && !!videoContext?.url;
+
+    // Clear input immediately
+    setInputValue('');
+    const displayMsg = buildDisplayMessage(msg, currentVideoCtx);
+
+    if (visionEnabled && currentVideoCtx) {
+      // AI Vision path: show message immediately, run vision, then send
+      setPendingMessage({ content: displayMsg, videoContext: currentVideoCtx });
+      setVisionLoading(true);
+      setParsedContext(null);
+      setVideoContext(null);
+      setAiVisionEnabled(false);
+
+      try {
+        const visionResult = await apiService.analyzeVideo({
+          url: currentVideoCtx.url,
+          author: currentVideoCtx.author,
+          views: String(currentVideoCtx.stats.playCount || 0),
+          uts: currentVideoCtx.uts_score || 0,
+          desc: currentVideoCtx.description,
+          custom_prompt: msg,
+        });
+
+        const analysis = visionResult.analysis || visionResult.result || JSON.stringify(visionResult);
+        ctx = [
+          ctx || '',
+          '\n--- GEMINI VISION ANALYSIS ---',
+          analysis,
+        ].filter(Boolean).join('\n');
+
+        toast.success(t('chat.visionComplete', { credits: visionResult.credits_used || 3 }));
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 402) {
+          toast.error(t('chat.visionNoCredits'));
+        } else {
+          toast.error(t('chat.visionError'));
+        }
+        setPendingMessage(null);
+        setVisionLoading(false);
+        setInputValue(msg);
+        return;
+      } finally {
+        setVisionLoading(false);
       }
 
-      const data = await response.json();
-
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.response || data.content || 'Sorry, I could not generate a response.',
-        timestamp: new Date().toISOString(),
-        isStreaming: false,
-      };
-      setMessages(prev => [...prev, aiMessage]);
-    } catch (error) {
-      console.error('AI chat error:', error);
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: t('chat.errorMessage'),
-        timestamp: new Date().toISOString(),
-        isStreaming: false,
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsStreaming(false);
+      // Vision done — now send to AI (pending message will be replaced by real one)
+      setPendingMessage(null);
+      await sendMessage(displayMsg, currentMode, currentModel, ctx);
+    } else {
+      // Normal path: send with video info in the displayed message
+      setParsedContext(null);
+      setVideoContext(null);
+      setAiVisionEnabled(false);
+      await sendMessage(displayMsg, currentMode, currentModel, ctx);
     }
   };
 
   const handleQuickAction = (action: QuickAction) => {
     setInputValue(action.prompt);
+    const modeMap: Record<string, string> = {
+      script: 'script',
+      ideas: 'ideas',
+      analysis: 'analysis',
+      improvement: 'improve',
+      hook: 'hook',
+      chat: 'chat',
+    };
+    if (modeMap[action.category]) {
+      setCurrentMode(modeMap[action.category]);
+    }
   };
 
-  const handlePopularPrompt = (prompt: string) => {
-    setInputValue(prompt);
+  const handleCopy = useCallback((content: string) => {
+    navigator.clipboard.writeText(content);
+  }, []);
+
+  // --- Parse Link handler ---
+  const handleParseLink = async () => {
+    if (!linkUrl.trim()) return;
+    setLinkParsing(true);
+    try {
+      const data = await apiService.parseLink(linkUrl.trim());
+      const ctx = [
+        `[${data.platform}] @${data.author}`,
+        data.description,
+        `Views: ${data.stats.views?.toLocaleString()} | Likes: ${data.stats.likes?.toLocaleString()} | Comments: ${data.stats.comments?.toLocaleString()}`,
+        data.hashtags?.length ? `Tags: ${data.hashtags.map(h => '#' + h).join(' ')}` : '',
+        data.music ? `Music: ${data.music}` : '',
+      ].filter(Boolean).join('\n');
+      setParsedContext(ctx);
+      setShowLinkInput(false);
+      setLinkUrl('');
+      toast.success(t('chat.linkParsed'));
+    } catch {
+      toast.error(t('chat.linkError'));
+    } finally {
+      setLinkParsing(false);
+    }
+  };
+
+  // --- Hashtag suggestions ---
+  const trendingTags = ['fyp', 'viral', 'trending', 'comedy', 'dance', 'food', 'fitness', 'beauty', 'tech', 'motivation'];
+
+  const handleInsertHashtag = (tag: string) => {
+    setInputValue((prev) => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + '#' + tag + ' ');
+    setShowHashMenu(false);
+  };
+
+  // --- Voice input ---
+  const toggleVoiceInput = useCallback(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error(t('chat.voiceNotSupported'));
+      return;
+    }
+
+    if (isRecording && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = document.documentElement.lang === 'ru' ? 'ru-RU' : 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInputValue((prev) => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + transcript);
+      setIsRecording(false);
+    };
+
+    recognition.onerror = () => {
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  }, [isRecording, t]);
+
+  // --- Saved videos picker ---
+  const loadSavedVideos = useCallback(async () => {
+    if (savedVideos.length > 0) return; // already loaded
+    setSavedLoading(true);
+    try {
+      const data = await apiService.getFavorites({ per_page: 30 });
+      setSavedVideos(data.items || []);
+    } catch {
+      // silent fail
+    } finally {
+      setSavedLoading(false);
+    }
+  }, [savedVideos.length]);
+
+  const handleAttachSaved = (item: any) => {
+    const trend = item.trend || item;
+    const vc: VideoContextData = {
+      url: trend.url || '',
+      description: trend.description || '',
+      author: trend.author_username || '',
+      cover: trend.cover_url || '',
+      stats: trend.stats || { playCount: 0, diggCount: 0, commentCount: 0, shareCount: 0 },
+      uts_score: trend.uts_score || 0,
+    };
+    setVideoContext(vc);
+    const ctx = [
+      `Video by @${vc.author}`,
+      vc.description,
+      `Views: ${(vc.stats.playCount || 0).toLocaleString()} | Likes: ${(vc.stats.diggCount || 0).toLocaleString()} | Comments: ${(vc.stats.commentCount || 0).toLocaleString()} | Shares: ${(vc.stats.shareCount || 0).toLocaleString()}`,
+      vc.uts_score > 0 ? `UTS Score: ${vc.uts_score}` : '',
+      vc.url ? `URL: ${vc.url}` : '',
+    ].filter(Boolean).join('\n');
+    setParsedContext(ctx);
+    setShowSavedPicker(false);
+    toast.success(t('chat.videoAttached'));
+  };
+
+  const handleClearVideoContext = () => {
+    setVideoContext(null);
+    setParsedContext(null);
+  };
+
+  const formatNumber = (num: number): string => {
+    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
+    if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K';
+    return num.toString();
   };
 
   const getIconComponent = (iconName: string) => {
-    const icons: Record<string, any> = {
-      FileText,
-      Lightbulb,
-      TrendingUp,
-      Wand2,
-    };
+    const icons: Record<string, any> = { FileText, Lightbulb, TrendingUp, Wand2, Target, MessageCircle };
     return icons[iconName] || FileText;
   };
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background">
+      {/* Session Sidebar */}
+      <ChatSidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="h-14 border-b border-border flex items-center px-6">
+        <div className="h-14 border-b border-border flex items-center justify-between px-6">
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="p-1.5 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+              title="Back to Dashboard"
+            >
+              <ArrowLeft className="h-4.5 w-4.5" />
+            </button>
             <Sparkles className="h-5 w-5 text-purple-500" />
             <h1 className="text-lg font-semibold">{t('title')}</h1>
+            {activeProject && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/20">
+                <FolderOpen className="h-3.5 w-3.5 text-purple-400" />
+                <span className="text-xs font-medium text-purple-400">
+                  {activeProject.icon && <span className="mr-1">{activeProject.icon}</span>}
+                  {activeProject.name}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {credits && (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Coins className="h-4 w-4" />
+                <span>{credits.remaining}</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-6">
-          {messages.length === 0 ? (
+          {messages.length === 0 && !isLoading && !pendingMessage ? (
             // Welcome Screen
             <div className="max-w-3xl mx-auto space-y-8 pt-12">
               <div className="text-center space-y-4">
@@ -329,22 +932,22 @@ export function AIWorkspace() {
               </div>
 
               {/* Quick Actions */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 {quickActions.map(action => {
                   const Icon = getIconComponent(action.icon);
                   return (
                     <Card
                       key={action.id}
-                      className="p-6 cursor-pointer hover:shadow-lg transition-all hover:scale-105 hover:border-blue-500"
+                      className="p-4 cursor-pointer hover:shadow-lg transition-all hover:scale-[1.03] hover:border-purple-500/50"
                       onClick={() => handleQuickAction(action)}
                     >
-                      <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                          <Icon className="h-6 w-6 text-white" />
+                      <div className="flex flex-col items-center text-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                          <Icon className="h-5 w-5 text-white" />
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold mb-1">{action.title}</h3>
-                          <p className="text-sm text-muted-foreground">{action.description}</p>
+                        <div>
+                          <h3 className="font-semibold text-sm mb-0.5">{action.title}</h3>
+                          <p className="text-xs text-muted-foreground">{action.description}</p>
                         </div>
                       </div>
                     </Card>
@@ -352,26 +955,24 @@ export function AIWorkspace() {
                 })}
               </div>
 
-              {/* Popular Prompts */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-muted-foreground">{t('popularPrompts.title')}</h3>
-                <div className="space-y-2">
-                  {popularPrompts.map((prompt, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handlePopularPrompt(prompt)}
-                      className="w-full text-left px-4 py-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors text-sm"
-                    >
-                      • {prompt}
-                    </button>
-                  ))}
-                </div>
+            </div>
+          ) : isLoading && messages.length === 0 && !pendingMessage ? (
+            // Loading state
+            <div className="max-w-3xl mx-auto flex items-center justify-center py-20">
+              <div className="flex gap-1">
+                <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           ) : (
             // Chat Messages
             <div className="max-w-3xl mx-auto space-y-6">
-              {messages.map((message) => (
+              {messages.map((message) => {
+                const { videoData, text: msgText } = message.role === 'user'
+                  ? parseVideoCard(message.content)
+                  : { videoData: null, text: message.content };
+                return (
                 <div
                   key={message.id}
                   className={cn(
@@ -392,6 +993,39 @@ export function AIWorkspace() {
                         : 'bg-accent'
                     )}
                   >
+                    {/* Video card inside user message */}
+                    {videoData && message.role === 'user' && (
+                      <div className="mb-2.5 rounded-xl overflow-hidden bg-white/10 border border-white/15">
+                        <div className="flex gap-3 p-2.5">
+                          {videoData.cover && (
+                            <img
+                              src={videoData.cover}
+                              alt=""
+                              className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-xs font-semibold text-white">@{videoData.author}</span>
+                              {videoData.uts_score > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 text-white/90 font-medium">
+                                  UTS {videoData.uts_score.toFixed(0)}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-white/70 line-clamp-2 mb-1.5">
+                              {videoData.description}
+                            </p>
+                            <div className="flex items-center gap-3 text-[10px] text-white/50">
+                              <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{formatNumber(videoData.stats.playCount)}</span>
+                              <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" />{formatNumber(videoData.stats.diggCount)}</span>
+                              <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" />{formatNumber(videoData.stats.commentCount)}</span>
+                              <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" />{formatNumber(videoData.stats.shareCount)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div
                       className="prose prose-sm dark:prose-invert max-w-none [&_img]:rounded-lg [&_img]:max-h-[512px] [&_img]:cursor-pointer"
                       onClick={(e) => {
@@ -403,23 +1037,22 @@ export function AIWorkspace() {
                       }}
                     >
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {message.content}
+                        {message.role === 'user' ? msgText : message.content}
                       </ReactMarkdown>
                     </div>
                     {/* Action buttons for assistant messages */}
                     {message.role === 'assistant' && (() => {
                       const imageUrls = extractImageUrls(message.content);
-                      console.log('[AIWorkspace] message content:', message.content?.substring(0, 200));
-                      console.log('[AIWorkspace] found images:', imageUrls);
                       return (
                         <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border/50">
-                          <Button variant="ghost" size="sm" className="h-8">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => handleCopy(message.content)}
+                          >
                             <Copy className="h-3 w-3 mr-1" />
                             {t('chat.copy')}
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-8">
-                            <Download className="h-3 w-3 mr-1" />
-                            {t('chat.save')}
                           </Button>
                           {imageUrls.length > 0 && imageUrls.map((imgUrl, idx) => {
                             const imgSrc = resolveImageSrc(imgUrl);
@@ -456,8 +1089,75 @@ export function AIWorkspace() {
                     </div>
                   )}
                 </div>
-              ))}
-              {isStreaming && (
+                );
+              })}
+              {/* Pending message (shown immediately while AI Vision is processing) */}
+              {pendingMessage && (() => {
+                const { videoData: pendingVideoData, text: pendingText } = parseVideoCard(pendingMessage.content);
+                return (
+                  <>
+                    {/* User message */}
+                    <div className="flex gap-4 justify-end">
+                      <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-blue-600 text-white">
+                        {/* Video card in pending message */}
+                        {pendingVideoData && (
+                          <div className="mb-2.5 rounded-xl overflow-hidden bg-white/10 border border-white/15">
+                            <div className="flex gap-3 p-2.5">
+                              {pendingVideoData.cover && (
+                                <img
+                                  src={pendingVideoData.cover}
+                                  alt=""
+                                  className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="text-xs font-semibold text-white">@{pendingVideoData.author}</span>
+                                  {pendingVideoData.uts_score > 0 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/20 text-white/90 font-medium">
+                                      UTS {pendingVideoData.uts_score.toFixed(0)}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-white/70 line-clamp-2 mb-1.5">
+                                  {pendingVideoData.description}
+                                </p>
+                                <div className="flex items-center gap-3 text-[10px] text-white/50">
+                                  <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{formatNumber(pendingVideoData.stats.playCount)}</span>
+                                  <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" />{formatNumber(pendingVideoData.stats.diggCount)}</span>
+                                  <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" />{formatNumber(pendingVideoData.stats.commentCount)}</span>
+                                  <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" />{formatNumber(pendingVideoData.stats.shareCount)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <div className="prose prose-sm prose-invert max-w-none">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {pendingText}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center flex-shrink-0 text-white text-sm font-bold">
+                        {user?.name?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                    </div>
+                    {/* Vision analyzing indicator */}
+                    <div className="flex gap-4">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="bg-accent rounded-2xl px-4 py-3">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
+                          <span>{t('chat.visionAnalyzing')}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+              {isStreaming && !pendingMessage && (
                 <div className="flex gap-4">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                     <Sparkles className="h-4 w-4 text-white" />
@@ -476,10 +1176,134 @@ export function AIWorkspace() {
           )}
         </div>
 
-        {/* Input Area - Cursor Style */}
+        {/* Input Area */}
         <div className="p-4 pb-6">
           <div className="max-w-3xl mx-auto">
             <div className="bg-muted/30 rounded-xl border border-border/50">
+              {/* Video context card (rich) */}
+              {videoContext && parsedContext && (
+                <div className="px-4 pt-3 pb-1 space-y-2">
+                  <div className="flex items-center gap-3 p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                    {/* Thumbnail */}
+                    {videoContext.cover && (
+                      <img
+                        src={videoContext.cover}
+                        alt=""
+                        className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-semibold text-foreground">@{videoContext.author}</span>
+                        {videoContext.uts_score > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-400 font-medium">
+                            UTS {videoContext.uts_score.toFixed(0)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground truncate mb-1">
+                        {videoContext.description}
+                      </p>
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
+                        <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber(videoContext.stats.playCount)}</span>
+                        <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(videoContext.stats.diggCount)}</span>
+                        <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(videoContext.stats.commentCount)}</span>
+                        <span className="flex items-center gap-0.5"><Share2 className="h-3 w-3" />{formatNumber(videoContext.stats.shareCount)}</span>
+                      </div>
+                    </div>
+                    <button onClick={handleClearVideoContext} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground flex-shrink-0">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  {/* AI Vision toggle */}
+                  {videoContext.url && (
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setAiVisionEnabled(!aiVisionEnabled)}
+                          className={cn(
+                            "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                            aiVisionEnabled ? "bg-purple-500" : "bg-muted-foreground/30"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
+                              aiVisionEnabled ? "translate-x-[18px]" : "translate-x-[3px]"
+                            )}
+                          />
+                        </button>
+                        <span className="text-xs font-medium text-foreground">
+                          AI Vision
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {t('chat.visionDesc')}
+                        </span>
+                      </div>
+                      <span className={cn(
+                        "text-[10px] font-medium px-1.5 py-0.5 rounded",
+                        aiVisionEnabled
+                          ? "bg-amber-500/15 text-amber-500"
+                          : "bg-muted text-muted-foreground"
+                      )}>
+                        {aiVisionEnabled ? t('chat.visionCredits') : t('chat.textCredits')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Parsed link context badge (simple, for link-parsed context without full video data) */}
+              {parsedContext && !videoContext && (
+                <div className="px-4 pt-3 pb-1">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-400">
+                    <Link className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="truncate flex-1">{parsedContext.split('\n')[0]}</span>
+                    <button onClick={() => setParsedContext(null)} className="hover:text-blue-300">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Link input popover */}
+              {showLinkInput && (
+                <div className="px-4 pt-3 pb-1">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      value={linkUrl}
+                      onChange={(e) => setLinkUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleParseLink();
+                        if (e.key === 'Escape') { setShowLinkInput(false); setLinkUrl(''); }
+                      }}
+                      placeholder={t('chat.pasteLinkPlaceholder')}
+                      className="flex-1 bg-accent/50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 text-foreground placeholder:text-muted-foreground"
+                      autoFocus
+                      disabled={linkParsing}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleParseLink}
+                      disabled={!linkUrl.trim() || linkParsing}
+                      className="h-8 px-3"
+                    >
+                      {linkParsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => { setShowLinkInput(false); setLinkUrl(''); }}
+                      className="h-8 w-8 p-0"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Input row */}
               <div className="px-4 py-3">
                 <textarea
@@ -510,7 +1334,8 @@ export function AIWorkspace() {
                   {/* AI Model selector */}
                   <div className="relative">
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setShowModelMenu(!showModelMenu);
                         setShowModeMenu(false);
                       }}
@@ -521,49 +1346,33 @@ export function AIWorkspace() {
                       <ChevronDown className="h-3 w-3" />
                     </button>
 
-                    {/* Model Dropdown */}
                     {showModelMenu && (
-                      <div className="absolute bottom-full left-0 mb-2 w-44 bg-popover border border-border rounded-xl shadow-xl py-1 z-50">
+                      <div
+                        className="absolute bottom-full left-0 mb-2 w-44 bg-popover border border-border rounded-xl shadow-xl py-1 z-50"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground border-b border-border/50">
                           {t('chat.models')}
                         </div>
                         {aiModels.map((model) => {
                           const IconComponent = model.icon;
-                          const isDisabled = !model.available;
                           return (
                             <button
                               key={model.id}
                               onClick={() => {
-                                if (model.available) {
-                                  setSelectedModel(model);
-                                  setShowModelMenu(false);
-                                }
+                                setCurrentModel(model.id);
+                                setShowModelMenu(false);
                               }}
-                              disabled={isDisabled}
-                              className={cn(
-                                "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors",
-                                isDisabled
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : "hover:bg-accent cursor-pointer"
-                              )}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent transition-colors cursor-pointer"
                             >
-                              <span className={isDisabled ? "opacity-50" : ""}>
-                                <IconComponent />
-                              </span>
-                              <span className={cn("flex-1 text-left", isDisabled && "text-muted-foreground")}>
-                                {model.name}
-                              </span>
+                              <IconComponent />
+                              <span className="flex-1 text-left">{model.name}</span>
                               {model.isImageGen && (
                                 <span className="text-[10px] px-1.5 py-0.5 bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded text-pink-400 font-medium">
                                   {t('chat.imageGen')}
                                 </span>
                               )}
-                              {model.comingSoon && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">
-                                  {t('chat.soon')}
-                                </span>
-                              )}
-                              {selectedModel.id === model.id && model.available && (
+                              {currentModel === model.id && (
                                 <Check className="h-4 w-4 text-purple-500" />
                               )}
                             </button>
@@ -576,7 +1385,8 @@ export function AIWorkspace() {
                   {/* Mode selector */}
                   <div className="relative">
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setShowModeMenu(!showModeMenu);
                         setShowModelMenu(false);
                       }}
@@ -587,9 +1397,11 @@ export function AIWorkspace() {
                       <ChevronDown className="h-3 w-3" />
                     </button>
 
-                    {/* Mode Dropdown */}
                     {showModeMenu && (
-                      <div className="absolute bottom-full left-0 mb-2 w-40 bg-popover border border-border rounded-xl shadow-xl py-1 z-50">
+                      <div
+                        className="absolute bottom-full left-0 mb-2 w-40 bg-popover border border-border rounded-xl shadow-xl py-1 z-50"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground border-b border-border/50">
                           {t('chat.mode')}
                         </div>
@@ -597,14 +1409,14 @@ export function AIWorkspace() {
                           <button
                             key={mode.id}
                             onClick={() => {
-                              setSelectedMode(mode);
+                              setCurrentMode(mode.id);
                               setShowModeMenu(false);
                             }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors"
                           >
                             <span>{mode.icon}</span>
                             <span className="flex-1 text-left">{mode.name}</span>
-                            {selectedMode.id === mode.id && (
+                            {currentMode === mode.id && (
                               <Check className="h-4 w-4 text-purple-500" />
                             )}
                           </button>
@@ -615,55 +1427,198 @@ export function AIWorkspace() {
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {/* Trend hashtag */}
+                  {/* Attach link */}
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className={cn(
+                      "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                      showLinkInput && "bg-purple-500/10 text-purple-400"
+                    )}
                     disabled={isStreaming}
-                    title={t('chat.addTrend')}
-                  >
-                    <Hash className="h-4 w-4" />
-                  </Button>
-
-                  {/* File upload */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                    disabled={isStreaming}
+                    onClick={() => { setShowLinkInput(!showLinkInput); setShowHashMenu(false); }}
                     title={t('chat.attachFile')}
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
 
+                  {/* Trend hashtag */}
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                        showHashMenu && "bg-purple-500/10 text-purple-400"
+                      )}
+                      disabled={isStreaming}
+                      onClick={(e) => { e.stopPropagation(); setShowHashMenu(!showHashMenu); setShowLinkInput(false); }}
+                      title={t('chat.addTrend')}
+                    >
+                      <Hash className="h-4 w-4" />
+                    </Button>
+
+                    {showHashMenu && (
+                      <div
+                        className="absolute bottom-full right-0 mb-2 w-48 bg-popover border border-border rounded-xl shadow-xl py-1 z-50"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground border-b border-border/50">
+                          {t('chat.addTrend')}
+                        </div>
+                        {trendingTags.map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={() => handleInsertHashtag(tag)}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+                          >
+                            <Hash className="h-3 w-3 text-muted-foreground" />
+                            <span>{tag}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Saved videos picker */}
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                        showSavedPicker && "bg-purple-500/10 text-purple-400"
+                      )}
+                      disabled={isStreaming}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const next = !showSavedPicker;
+                        setShowSavedPicker(next);
+                        setShowHashMenu(false);
+                        setShowLinkInput(false);
+                        if (next) loadSavedVideos();
+                      }}
+                      title={t('chat.savedVideos')}
+                    >
+                      <Bookmark className="h-4 w-4" />
+                    </Button>
+
+                    {showSavedPicker && (
+                      <div
+                        className="absolute bottom-full right-0 mb-2 w-72 max-h-80 bg-popover border border-border rounded-xl shadow-xl z-50 overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border/50 flex items-center gap-2">
+                          <Bookmark className="h-3.5 w-3.5" />
+                          {t('chat.savedVideosTitle')}
+                        </div>
+                        <div className="overflow-y-auto max-h-64">
+                          {savedLoading ? (
+                            <div className="flex items-center justify-center py-6">
+                              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                            </div>
+                          ) : savedVideos.length === 0 ? (
+                            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                              {t('chat.noSavedVideos')}
+                            </div>
+                          ) : (
+                            savedVideos.map((item: any) => {
+                              const trend = item.trend || item;
+                              return (
+                                <button
+                                  key={item.id}
+                                  onClick={() => handleAttachSaved(item)}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-accent transition-colors text-left"
+                                >
+                                  {trend.cover_url && (
+                                    <img
+                                      src={trend.cover_url}
+                                      alt=""
+                                      className="w-10 h-10 rounded object-cover flex-shrink-0"
+                                    />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium truncate">
+                                      @{trend.author_username || 'unknown'}
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground truncate">
+                                      {trend.description || t('chat.noDescription')}
+                                    </p>
+                                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 mt-0.5">
+                                      <span className="flex items-center gap-0.5">
+                                        <Eye className="h-2.5 w-2.5" />
+                                        {formatNumber(trend.stats?.playCount || 0)}
+                                      </span>
+                                      <span className="flex items-center gap-0.5">
+                                        <Heart className="h-2.5 w-2.5" />
+                                        {formatNumber(trend.stats?.diggCount || 0)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Voice input */}
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className={cn(
+                      "h-8 w-8 rounded-full transition-colors",
+                      isRecording
+                        ? "bg-red-500/20 text-red-500 animate-pulse"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    )}
                     disabled={isStreaming}
+                    onClick={toggleVoiceInput}
                     title={t('chat.voiceInput')}
                   >
                     <Mic className="h-4 w-4" />
                   </Button>
 
-                  {/* Send button */}
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={!inputValue.trim() || isStreaming}
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      "h-8 w-8 rounded-full transition-colors",
-                      inputValue.trim()
-                        ? "bg-purple-500 text-white hover:bg-purple-600"
-                        : "text-muted-foreground hover:bg-muted/50"
-                    )}
-                    title={t('chat.sendMessage')}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+                  {/* Stop / Send */}
+                  {isStreaming ? (
+                    <Button
+                      onClick={stopGeneration}
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                      title={t('chat.stop')}
+                    >
+                      <StopCircle className="h-4 w-4" />
+                    </Button>
+                  ) : visionLoading ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-full bg-purple-500/10 text-purple-400"
+                      disabled
+                      title={t('chat.visionAnalyzing')}
+                    >
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!inputValue.trim()}
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-8 w-8 rounded-full transition-colors",
+                        inputValue.trim()
+                          ? "bg-purple-500 text-white hover:bg-purple-600"
+                          : "text-muted-foreground hover:bg-muted/50"
+                      )}
+                      title={t('chat.sendMessage')}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -677,7 +1632,6 @@ export function AIWorkspace() {
           className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center"
           onClick={closeLightbox}
         >
-          {/* Top bar */}
           <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 z-10">
             <div className="text-white/60 text-sm">
               {Math.round(lightboxZoom * 100)}%
@@ -720,7 +1674,6 @@ export function AIWorkspace() {
             </div>
           </div>
 
-          {/* Image */}
           <div
             className="overflow-auto max-h-[calc(100vh-80px)] max-w-[calc(100vw-40px)]"
             onClick={(e) => e.stopPropagation()}

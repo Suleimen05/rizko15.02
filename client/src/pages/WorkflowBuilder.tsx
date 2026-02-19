@@ -75,6 +75,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChat } from '@/contexts/ChatContext';
 import { useWorkflow, type SavedVideo } from '@/contexts/WorkflowContext';
+import { useProject } from '@/contexts/ProjectContext';
 import { apiService } from '@/services/api';
 import { toast } from 'sonner';
 import { DevAccessGate } from '@/components/DevAccessGate';
@@ -296,6 +297,7 @@ const getTemplates = (t: TFunction) => [
 export function WorkflowBuilder() {
   const { t } = useTranslation('workflow');
   const { user: _user, tokens } = useAuth();
+  const { activeProject } = useProject();
   const token = tokens?.accessToken;
 
   // Use shared chat context
@@ -1034,6 +1036,7 @@ export function WorkflowBuilder() {
         workflow_id: currentWorkflow?.id,
         workflow_name: workflowName,
         language: i18n.language === 'ru' ? 'Russian' : 'English',
+        ...(activeProject?.id && { project_id: activeProject.id }),
       };
 
       const result = await apiService.executeWorkflow(workflowData);

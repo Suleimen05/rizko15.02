@@ -16,6 +16,7 @@ import {
   Globe,
   ArrowUpCircle,
   ChevronRight,
+  ScanEye,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,7 @@ import { useState } from 'react';
 import { REVIEW_MODE } from '@/config/features';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '@/hooks/useLanguage';
+import { ProjectSwitcher } from '@/components/ProjectSwitcher';
 import type { TFunction } from 'i18next';
 
 interface NavItem {
@@ -48,6 +50,7 @@ const getToolsNavItems = (t: TFunction): NavItem[] => REVIEW_MODE
   : [
       { title: t('common:nav.trending'), href: '/dashboard/trending', icon: TrendingUp, badge: 'NEW' },
       { title: t('common:nav.discover'), href: '/dashboard/discover', icon: Search },
+      { title: 'Super Vision', href: '/dashboard/super-vision', icon: ScanEye, badge: 'PRO' },
       { title: t('common:nav.deepAnalysis'), href: '/dashboard/analytics', icon: BarChart3 },
       { title: t('common:nav.saved'), href: '/dashboard/saved', icon: Bookmark },
       { title: t('common:nav.competitors'), href: '/dashboard/competitors', icon: Users },
@@ -56,7 +59,7 @@ const getToolsNavItems = (t: TFunction): NavItem[] => REVIEW_MODE
 const getAiNavItems = (t: TFunction): NavItem[] => REVIEW_MODE
   ? []
   : [
-      { title: t('common:nav.aiScripts'), href: '/dashboard/ai-scripts', icon: Sparkles, badge: 'AI' },
+      { title: t('common:nav.aiChat'), href: '/dashboard/ai-workspace', icon: Sparkles, badge: 'AI' },
     ];
 
 const getSupportNavItems = (t: TFunction): NavItem[] => [
@@ -168,6 +171,7 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto py-4 px-2 space-y-6">
+        <ProjectSwitcher />
         <nav className="space-y-0.5">
           {mainNavItems.map((item) => (
             <NavItemComponent key={item.href} item={item} />
