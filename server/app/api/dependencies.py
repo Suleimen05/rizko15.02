@@ -553,6 +553,7 @@ class CreditManager:
         "export_report": 3,
         "project_search": 2,
         "project_generate_profile": 2,
+        "project_generate_questions": 1,
         "project_transcribe": 1,
     }
 

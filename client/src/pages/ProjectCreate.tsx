@@ -10,6 +10,7 @@ import {
   Check,
   Sparkles,
   RefreshCw,
+  MessageCircleQuestion,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,9 +78,9 @@ const TOTAL_STEPS = 3;
 // =============================================================================
 
 export default function ProjectCreate() {
-  const { t } = useTranslation('projects');
+  const { t, i18n } = useTranslation('projects');
   const navigate = useNavigate();
-  const { createProject, generateProfile, transcribeAudio, setActiveProject } =
+  const { createProject, generateProfile, generateQuestions, transcribeAudio, setActiveProject } =
     useProject();
 
   // ─── State ────────────────────────────────────────────────────
@@ -97,6 +98,12 @@ export default function ProjectCreate() {
     null
   );
   const [createdProjectId, setCreatedProjectId] = useState<number | null>(null);
+
+  // AI Questions (Step 2)
+  const [aiQuestions, setAiQuestions] = useState<string[]>([]);
+  const [questionAnswers, setQuestionAnswers] = useState<string[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [activeQuestionIdx, setActiveQuestionIdx] = useState<number | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -147,9 +154,20 @@ export default function ProjectCreate() {
           try {
             const text = await transcribeAudio(createdProjectId, blob);
             if (text) {
-              setDescriptionText((prev) =>
-                prev ? `${prev}\n${text}` : text
-              );
+              // If we have AI questions and an active question, append to that answer
+              if (aiQuestions.length > 0 && activeQuestionIdx !== null) {
+                setQuestionAnswers((prev) => {
+                  const updated = [...prev];
+                  updated[activeQuestionIdx] = updated[activeQuestionIdx]
+                    ? `${updated[activeQuestionIdx]} ${text}`
+                    : text;
+                  return updated;
+                });
+              } else {
+                setDescriptionText((prev) =>
+                  prev ? `${prev}\n${text}` : text
+                );
+              }
             }
           } finally {
             setIsTranscribing(false);
@@ -171,20 +189,85 @@ export default function ProjectCreate() {
     }
   }, [isRecording]);
 
+  // ─── Detect UI language ──────────────────────────────────────
+  const getLanguageForAI = (): string => {
+    // Check multiple sources to determine the correct language
+    const stored = localStorage.getItem('rizko_language');
+    const i18nLang = i18n.language;
+    const i18nResolved = i18n.resolvedLanguage;
+    const docLang = document.documentElement.lang;
+
+    console.log('[ProjectCreate] Language detection:', {
+      localStorage: stored,
+      'i18n.language': i18nLang,
+      'i18n.resolvedLanguage': i18nResolved,
+      'document.lang': docLang,
+    });
+
+    // Any of these indicates Russian
+    if (stored === 'ru' || i18nLang?.startsWith('ru') || i18nResolved === 'ru' || docLang === 'ru') {
+      return 'Russian';
+    }
+    return 'English';
+  };
+
   // ─── Navigate between steps ───────────────────────────────────
   const handleNext = useCallback(async () => {
     if (step === 1) {
-      // Create the project on the backend when moving to step 2
-      if (!createdProjectId) {
-        const project = await createProject(projectName.trim());
-        if (!project) return;
-        setCreatedProjectId(project.id);
-      }
+      // Immediately transition to step 2 — don't wait for backend
       setStep(2);
+      setIsLoadingQuestions(true);
+
+      try {
+        // Create project in background
+        let pid = createdProjectId;
+        if (!pid) {
+          const project = await createProject(projectName.trim());
+          if (!project) {
+            setIsLoadingQuestions(false);
+            setStep(1);
+            return;
+          }
+          setCreatedProjectId(project.id);
+          pid = project.id;
+        }
+
+        // Generate AI questions
+        if (aiQuestions.length === 0) {
+          const language = getLanguageForAI();
+          console.log('[ProjectCreate] Will send language:', language);
+
+          const formData = {
+            niche: selectedNiche,
+            formats: selectedFormats,
+            platforms: selectedPlatforms,
+            audience: selectedAudience,
+            language,
+          };
+          const questions = await generateQuestions(pid, formData);
+          if (questions.length > 0) {
+            setAiQuestions(questions);
+            setQuestionAnswers(new Array(questions.length).fill(''));
+          }
+        }
+      } finally {
+        setIsLoadingQuestions(false);
+      }
     } else if (step === 2) {
+      // Combine Q&A into description text for profile generation
+      if (aiQuestions.length > 0) {
+        const qaPairs = aiQuestions
+          .map((q, i) => {
+            const answer = questionAnswers[i]?.trim();
+            return answer ? `Q: ${q}\nA: ${answer}` : null;
+          })
+          .filter(Boolean)
+          .join('\n\n');
+        setDescriptionText(qaPairs);
+      }
       setStep(3);
     }
-  }, [step, createdProjectId, createProject, projectName]);
+  }, [step, createdProjectId, createProject, projectName, aiQuestions, questionAnswers, selectedNiche, selectedFormats, selectedPlatforms, selectedAudience, generateQuestions]);
 
   const handleBack = useCallback(() => {
     if (step > 1) {
@@ -381,72 +464,132 @@ export default function ProjectCreate() {
   );
 
   // =========================================================================
-  // RENDER — Step 2: Voice / Text Description
+  // RENDER — Step 2: AI-Generated Questions
   // =========================================================================
-  const renderStep2 = () => (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">
-          {t('create.descriptionLabel')}
-        </label>
-        <p className="text-sm text-muted-foreground">{t('create.orText')}</p>
-      </div>
+  const renderStep2 = () => {
+    // Loading state while questions are being generated
+    if (isLoadingQuestions) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 space-y-4">
+          <div className="relative">
+            <div className="absolute inset-0 animate-ping rounded-full bg-primary/20 h-14 w-14" />
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+              <MessageCircleQuestion className="h-7 w-7 text-primary animate-pulse" />
+            </div>
+          </div>
+          <p className="text-base font-medium text-foreground">
+            {t('create.generatingQuestions')}
+          </p>
+          <p className="text-sm text-muted-foreground text-center max-w-sm">
+            {t('create.generatingQuestionsDesc')}
+          </p>
+        </div>
+      );
+    }
 
-      {/* Voice Recording Controls */}
-      <div className="flex items-center gap-3">
-        {!isRecording ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            onClick={startRecording}
-            disabled={isTranscribing}
-            className="gap-2"
-          >
-            <Mic className="h-5 w-5" />
-            {t('create.recordVoice')}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="destructive"
-            size="lg"
-            onClick={stopRecording}
-            className="gap-2 animate-pulse"
-          >
-            <Square className="h-4 w-4" />
-            {t('create.stopRecording')}
-          </Button>
-        )}
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="space-y-1.5">
+          <p className="text-sm text-muted-foreground">
+            {t('create.questionsIntro')}
+          </p>
+        </div>
 
-        {isRecording && (
-          <div className="flex items-center gap-2 text-sm text-destructive">
-            <span className="relative flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-destructive" />
-            </span>
-            {t('create.recording')}
+        {/* AI Questions */}
+        {aiQuestions.map((question, idx) => (
+          <div key={idx} className="space-y-2">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary mt-0.5">
+                {idx + 1}
+              </div>
+              <label className="text-sm font-medium text-foreground leading-snug">
+                {question}
+              </label>
+            </div>
+            <div className="pl-8 flex items-start gap-2">
+              <Textarea
+                value={questionAnswers[idx] || ''}
+                onChange={(e) => {
+                  setQuestionAnswers((prev) => {
+                    const updated = [...prev];
+                    updated[idx] = e.target.value;
+                    return updated;
+                  });
+                }}
+                onFocus={() => setActiveQuestionIdx(idx)}
+                placeholder={t('create.answerPlaceholder')}
+                className="min-h-[80px] text-sm leading-relaxed resize-y flex-1"
+                disabled={isRecording || isTranscribing}
+              />
+              {/* Per-question voice button */}
+              <div className="shrink-0 pt-1">
+                {!isRecording ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={() => {
+                      setActiveQuestionIdx(idx);
+                      startRecording();
+                    }}
+                    disabled={isTranscribing}
+                    title={t('create.recordVoice')}
+                  >
+                    <Mic className="h-4 w-4" />
+                  </Button>
+                ) : activeQuestionIdx === idx ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive animate-pulse"
+                    onClick={stopRecording}
+                    title={t('create.stopRecording')}
+                  >
+                    <Square className="h-3.5 w-3.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground opacity-50"
+                    disabled
+                  >
+                    <Mic className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            {/* Transcribing indicator for this question */}
+            {isTranscribing && activeQuestionIdx === idx && (
+              <div className="pl-8 flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t('create.transcribing')}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Fallback: if no questions loaded, show plain textarea */}
+        {aiQuestions.length === 0 && (
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-foreground">
+              {t('create.descriptionLabel')}
+            </label>
+            <Textarea
+              value={descriptionText}
+              onChange={(e) => setDescriptionText(e.target.value)}
+              placeholder={t('create.descriptionPlaceholder')}
+              className="min-h-[200px] text-base leading-relaxed resize-y"
+            />
           </div>
         )}
-
-        {isTranscribing && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t('create.transcribing')}
-          </div>
-        )}
       </div>
-
-      {/* Text Area */}
-      <Textarea
-        value={descriptionText}
-        onChange={(e) => setDescriptionText(e.target.value)}
-        placeholder={t('create.descriptionPlaceholder')}
-        className="min-h-[200px] text-base leading-relaxed resize-y"
-        disabled={isRecording || isTranscribing}
-      />
-    </div>
-  );
+    );
+  };
 
   // =========================================================================
   // RENDER — Step 3: AI Profile Review

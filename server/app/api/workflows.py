@@ -1444,14 +1444,35 @@ async def execute_workflow(
             if project and project.profile_data:
                 p = project.profile_data
                 audience = p.get('audience', {})
-                audience_str = f"Age: {audience.get('age', 'N/A')}, Gender: {audience.get('gender', 'N/A')}, Interests: {', '.join(audience.get('interests', []))}"
-                project_context_prefix = f"""PROJECT CONTEXT (tailor content for this project):
-- Niche: {p.get('niche', 'N/A')} / {p.get('sub_niche', '')}
-- Content format: {', '.join(p.get('format', []))}
-- Target audience: {audience_str}
-- Tone/style: {p.get('tone', '')}
-- Platforms: {', '.join(p.get('platforms', []))}
-- MUST AVOID: {', '.join(p.get('exclude', []))}
+                if isinstance(audience, dict):
+                    audience_parts = []
+                    if audience.get('age'): audience_parts.append(f"Age: {audience['age']}")
+                    if audience.get('gender'): audience_parts.append(f"Gender: {audience['gender']}")
+                    if audience.get('level'): audience_parts.append(f"Level: {audience['level']}")
+                    if audience.get('interests'): audience_parts.append(f"Interests: {', '.join(audience['interests'])}")
+                    audience_str = ', '.join(audience_parts)
+                else:
+                    audience_str = str(audience)
+
+                creator_qa = ""
+                if project.raw_input and project.raw_input.get('description_text'):
+                    creator_qa = project.raw_input['description_text']
+
+                project_context_prefix = f"""===== CREATOR PROFILE =====
+NICHE: {p.get('niche', '')} / {p.get('sub_niche', '')}
+FORMATS: {', '.join(p.get('format', []))}
+PLATFORMS: {', '.join(p.get('platforms', []))}
+TONE: {p.get('tone', '')}
+AUDIENCE: {audience_str}
+KEYWORDS: {', '.join(p.get('keywords', []))}
+ANTI-KEYWORDS: {', '.join(p.get('anti_keywords', []))}
+EXCLUDE: {', '.join(p.get('exclude', []))}
+
+CREATOR'S OWN WORDS:
+{creator_qa if creator_qa else 'N/A'}
+===== END PROFILE =====
+
+Tailor ALL workflow outputs for this creator's niche, tone, audience, and style.
 
 """
 

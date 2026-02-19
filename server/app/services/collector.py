@@ -16,12 +16,14 @@ class TikTokCollector:
         # Используем именно этот актор
         self.actor_id = "apidojo/tiktok-scraper"
 
-    def collect(self, targets: List[str], limit: int = 30, mode: str = "search", is_deep: bool = False):
+    def collect(self, targets: List[str], limit: int = 30, mode: str = "search", is_deep: bool = False, search_section: str = "top"):
         """
         Режимы (mode):
         - "search": Ищет по ключевым словам.
         - "profile": Ищет видео конкретных юзеров.
         - "urls":   Сканирует СПИСОК КОНКРЕТНЫХ ВИДЕО (для рескана).
+
+        search_section: "top" (default) or "" (mixed/recent).
         """
         if not self.client or not targets:
             return []
@@ -68,7 +70,7 @@ class TikTokCollector:
         else:
             # --- РЕЖИМ ПОИСКА (По умолчанию) ---
             run_input["keywords"] = targets
-            run_input["searchSection"] = "top"
+            run_input["searchSection"] = search_section or "top"
             # startUrls не нужен для поиска по ключевым словам
             if "startUrls" in run_input: del run_input["startUrls"]
 

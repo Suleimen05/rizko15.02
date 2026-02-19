@@ -30,6 +30,10 @@ interface ProjectContextType {
   updateProject: (id: number, data: Partial<Project>) => Promise<void>;
   deleteProject: (id: number) => Promise<void>;
   setActiveProject: (project: Project | null) => void;
+  generateQuestions: (
+    id: number,
+    formData: Record<string, any>
+  ) => Promise<string[]>;
   generateProfile: (
     id: number,
     formData: Record<string, any>,
@@ -148,6 +152,23 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   }, [activeProject, setActiveProject]);
 
+  // ─── Generate questions ────────────────────────────────────
+  const generateQuestions = useCallback(async (
+    id: number,
+    formData: Record<string, any>
+  ): Promise<string[]> => {
+    try {
+      const result = await apiService.generateProjectQuestions(id, {
+        form_data: formData,
+      });
+      return result.questions || [];
+    } catch (err: any) {
+      console.error('Failed to generate questions:', err);
+      toast.error(err?.response?.data?.detail || 'Failed to generate questions');
+      return [];
+    }
+  }, []);
+
   // ─── Generate profile ──────────────────────────────────────
   const generateProfile = useCallback(async (
     id: number,
@@ -195,6 +216,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     updateProject,
     deleteProject,
     setActiveProject,
+    generateQuestions,
     generateProfile,
     transcribeAudio,
   };

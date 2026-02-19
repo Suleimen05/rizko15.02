@@ -190,6 +190,9 @@ def _score_batch(videos: list, profile: dict, gemini_client) -> dict:
     else:
         audience_str = str(audience)
 
+    keywords_str = ', '.join(profile.get('keywords', [])) if profile.get('keywords') else ''
+    anti_keywords_str = ', '.join(profile.get('anti_keywords', [])) if profile.get('anti_keywords') else ''
+
     prompt = f"""Score each video's relevance to this content project (0-100).
 
 PROJECT PROFILE:
@@ -197,13 +200,15 @@ PROJECT PROFILE:
 - Format: {', '.join(profile.get('format', []))}
 - Audience: {audience_str}
 - Style: {profile.get('tone', '')}
+- Keywords (boost score): {keywords_str}
+- Anti-keywords (lower score): {anti_keywords_str}
 - EXCLUDE: {', '.join(profile.get('exclude', []))}
 
 SCORING RUBRIC (each 0-25):
-1. Topic match — does the content match the niche/sub-niche?
+1. Topic match — does the content match the niche/sub-niche/keywords?
 2. Format match — does the video format match (UGC, tutorial, etc.)?
 3. Audience match — is this for the right audience?
-4. Clean content — no excluded elements (clickbait, spam, etc.)?
+4. Clean content — no excluded elements or anti-keywords?
 
 VIDEOS:
 {chr(10).join(video_descriptions)}

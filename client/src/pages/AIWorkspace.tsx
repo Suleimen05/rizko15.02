@@ -605,7 +605,11 @@ export function AIWorkspace() {
     const urls: string[] = [];
     let match;
     while ((match = imgRegex.exec(content)) !== null) {
-      urls.push(match[2]);
+      const url = match[2];
+      // Only include real generated image URLs, not broken/placeholder links
+      if (url.includes('/uploads/generated/') || url.startsWith('http')) {
+        urls.push(url);
+      }
     }
     return urls;
   }, []);
@@ -1036,7 +1040,27 @@ export function AIWorkspace() {
                         }
                       }}
                     >
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          img: ({ src, alt, ...props }) => {
+                            // Only render images with valid generated URLs
+                            if (!src || (!src.includes('/uploads/generated/') && !src.startsWith('http'))) {
+                              return null;
+                            }
+                            const resolvedSrc = resolveImageSrc(src);
+                            return (
+                              <img
+                                src={resolvedSrc}
+                                alt={alt || ''}
+                                className="rounded-lg max-w-full cursor-pointer"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                {...props}
+                              />
+                            );
+                          },
+                        }}
+                      >
                         {message.role === 'user' ? msgText : message.content}
                       </ReactMarkdown>
                     </div>

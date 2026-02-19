@@ -10,6 +10,7 @@ import os
 import json
 import re
 import logging
+import asyncio
 from datetime import datetime
 from typing import Optional
 
@@ -269,17 +270,30 @@ Return ONLY valid JSON, no other text."""
         # Fallback: generate basic profile from form data
         profile = _fallback_profile(data.form_data, data.description_text)
     else:
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=prompt,
-                config={"temperature": 0.0}
-            )
-            profile = _parse_json_response(response.text)
-            if not profile:
-                profile = _fallback_profile(data.form_data, data.description_text)
-        except Exception as e:
-            logger.error(f"Gemini profile generation error: {e}")
+        profile = None
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.0-flash",
+                    contents=prompt,
+                    config={"temperature": 0.0}
+                )
+                profile = _parse_json_response(response.text)
+                if profile:
+                    break
+                logger.warning(f"[generate-profile] Attempt {attempt+1}: failed to parse response")
+            except Exception as e:
+                error_str = str(e)
+                logger.error(f"[generate-profile] Attempt {attempt+1}/{max_retries} error: {e}")
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 5  # 5s, 10s, 15s
+                        logger.info(f"[generate-profile] Rate limited, waiting {wait_time}s before retry...")
+                        await asyncio.sleep(wait_time)
+                        continue
+                break  # Non-retryable error
+        if not profile:
             profile = _fallback_profile(data.form_data, data.description_text)
 
     project.profile_data = profile
@@ -287,6 +301,93 @@ Return ONLY valid JSON, no other text."""
     db.commit()
     db.refresh(project)
     return _project_to_response(project, db)
+
+
+@router.post("/{project_id}/generate-questions")
+async def generate_questions(
+    project_id: int,
+    data: GenerateProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate personalized open-ended questions based on Step 1 form data.
+    AI creates 5 targeted questions to deeply understand the creator's content profile.
+    Costs 1 credit.
+    """
+    project = _get_user_project(project_id, current_user, db)
+
+    # Check credits
+    await CreditManager.check_and_deduct("project_generate_questions", current_user, db)
+
+    form_info = json.dumps(data.form_data, ensure_ascii=False) if data.form_data else "{}"
+    niche = data.form_data.get("niche", "general") if data.form_data else "general"
+    formats = data.form_data.get("formats", []) if data.form_data else []
+    audience = data.form_data.get("audience", "") if data.form_data else ""
+    platforms = data.form_data.get("platforms", []) if data.form_data else []
+    language = data.form_data.get("language", "English") if data.form_data else "English"
+    logger.info(f"[generate-questions] FULL form_data={data.form_data}")
+    logger.info(f"[generate-questions] language={language}, niche={niche}, formats={formats}")
+
+    prompt = f"""You are an expert content strategist interviewing a new creator to build their content profile.
+
+The creator has provided these basics:
+- Niche: {niche}
+- Content formats: {', '.join(formats) if formats else 'not specified'}
+- Target audience age: {audience or 'not specified'}
+- Platforms: {', '.join(platforms) if platforms else 'not specified'}
+
+Generate exactly 5 specific, open-ended questions that will deeply reveal:
+1. Their unique style and what makes their content different
+2. Their specific sub-niche and topics they cover
+3. Their target audience details (who exactly watches them)
+4. Content they want to AVOID (competitors, styles, topics)
+5. Their goals and what success looks like for them
+
+RULES:
+- WRITE ALL QUESTIONS IN {language.upper()} LANGUAGE
+- Questions must be specific to their niche "{niche}", not generic
+- Each question should unlock information that buttons/forms cannot capture
+- Questions should feel natural and conversational
+- Keep questions concise (1-2 sentences max)
+
+Return ONLY a valid JSON array of 5 strings, no other text:
+["Question 1?", "Question 2?", "Question 3?", "Question 4?", "Question 5?"]"""
+
+    client = _get_gemini_client()
+    if not client:
+        questions = _fallback_questions(niche, formats, audience, language)
+        return {"questions": questions}
+
+    questions = None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config={"temperature": 0.7}
+            )
+            raw = response.text.strip()
+            parsed = _parse_json_response_array(raw)
+            if parsed and isinstance(parsed, list) and len(parsed) >= 3:
+                questions = [str(q) for q in parsed[:5]]
+                break
+            logger.warning(f"[generate-questions] Attempt {attempt+1}: failed to parse response")
+        except Exception as e:
+            error_str = str(e)
+            logger.error(f"[generate-questions] Attempt {attempt+1}/{max_retries} error: {e}")
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5
+                    logger.info(f"[generate-questions] Rate limited, waiting {wait_time}s before retry...")
+                    await asyncio.sleep(wait_time)
+                    continue
+            break
+    if not questions:
+        questions = _fallback_questions(niche, formats, audience, language)
+
+    return {"questions": questions}
 
 
 @router.post("/{project_id}/transcribe")
@@ -394,3 +495,36 @@ def _fallback_profile(form_data: dict, description: str) -> dict:
         "keywords": [niche],
         "anti_keywords": [],
     }
+
+
+def _parse_json_response_array(text: str) -> Optional[list]:
+    """Extract JSON array from AI response."""
+    try:
+        match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
+        match = re.search(r'\[.*\]', text, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+    except (json.JSONDecodeError, Exception) as e:
+        logger.warning(f"Failed to parse JSON array: {e}")
+    return None
+
+
+def _fallback_questions(niche: str, formats: list, audience: str, language: str = "English") -> list:
+    """Fallback questions when AI is unavailable."""
+    if language.lower() == "russian":
+        return [
+            f"Какие конкретные темы в нише «{niche}» вы освещаете? В чём ваш уникальный подход?",
+            "Опишите вашего идеального зрителя — кто он, с чем борется, что хочет получить?",
+            "Какой стиль и тон у вашего контента? (например: смешной, обучающий, мотивационный, честный/raw)",
+            "Какой контент вы хотите ИЗБЕГАТЬ? Есть ли авторы или стили, с которыми не хотите ассоциироваться?",
+            "Какие цели по контенту на ближайшие 3 месяца? (рост, монетизация, рекламные интеграции, комьюнити)",
+        ]
+    return [
+        f"What specific topics within {niche} do you focus on? What's your unique angle?",
+        "Describe your ideal viewer — who are they, what do they struggle with, what do they want?",
+        "What content style or tone do you use? (e.g. funny, educational, motivational, raw/authentic)",
+        "What kind of content do you want to AVOID? Any creators or styles you don't want to be associated with?",
+        "What are your content goals for the next 3 months? (growth, monetization, brand deals, community)",
+    ]

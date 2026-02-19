@@ -32,8 +32,8 @@
     "title": "Create Project",
     "step1Title": "About Your Content",
     "step1Desc": "Tell us about your niche and format",
-    "step2Title": "Describe Your Brand",
-    "step2Desc": "Tell us more about your content in text or voice",
+    "step2Title": "Deep Dive",
+    "step2Desc": "Answer AI-tailored questions about your content",
     "step3Title": "Review Profile",
     "step3Desc": "AI generated your content profile",
 
@@ -92,6 +92,11 @@
       "35-44": "35-44",
       "45+": "45+"
     },
+
+    "generatingQuestions": "Creating personalized questions...",
+    "generatingQuestionsDesc": "AI is analyzing your niche to ask the right questions",
+    "questionsIntro": "Answer these questions to help AI build the most accurate content profile. Type or use the mic to record your answer.",
+    "answerPlaceholder": "Your answer...",
 
     "descriptionLabel": "Describe your content and brand",
     "descriptionPlaceholder": "Tell us about your content style, target audience, what makes you unique, what topics you cover...",

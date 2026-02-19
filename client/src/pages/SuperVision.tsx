@@ -576,8 +576,8 @@ export default function SuperVision() {
       {/* Max vision videos */}
       <div>
         <label className="text-xs font-medium text-foreground mb-1.5 block">
-          AI Vision analysis
-          <span className="text-muted-foreground font-normal ml-1">(5 credits each)</span>
+          Max videos per scan
+          <span className="text-muted-foreground font-normal ml-1">(with AI Vision, 5 credits each)</span>
         </label>
         <div className="flex flex-wrap gap-2">
           {VISION_OPTIONS.map(opt => (

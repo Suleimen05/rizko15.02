@@ -152,59 +152,101 @@ def run_super_vision_scan(config_id: int):
 
         logger.info(f"[SUPER VISION] Keywords: {keywords}")
 
-        # ── STEP 2: Scrape via Apify ────────────────────────
+        # ── STEPS 2-3: Iterative scrape + filter by views/date ────
+        # Keep scraping until we have enough qualifying videos or hit max rounds
         from ..services.collector import TikTokCollector
-        collector = TikTokCollector()
-        raw_items = collector.collect(keywords, limit=50, mode="search")
-        scan_stats["scraped"] = len(raw_items)
-        logger.info(f"[SUPER VISION] Scraped {len(raw_items)} videos")
-
-        if not raw_items:
-            config.last_run_at = datetime.utcnow()
-            config.last_run_status = "no_results"
-            config.last_run_stats = scan_stats
-            config.next_run_at = datetime.utcnow() + timedelta(hours=config.scan_interval_hours)
-            db.commit()
-            return
-
-        # ── STEP 3: Parse + filter by views/date ────────────
         from ..api.trends import parse_video_data
-        parsed_videos = []
+
+        collector = TikTokCollector()
         cutoff_date = datetime.utcnow() - timedelta(days=config.date_range_days)
+        target_count = config.max_vision_videos * 3  # aim for 3x to have enough after AI filtering
+        seen_ids = set()  # track across rounds to avoid re-processing
 
-        for idx, item in enumerate(raw_items):
-            parsed = parse_video_data(item, idx)
-            stats = parsed.get("stats", {})
-            views = stats.get("playCount", 0) if isinstance(stats, dict) else 0
+        parsed_videos = []
+        total_scraped = 0
+        scrape_limits = [40, 40, 40, 40, 40]  # 40 per round, up to 5 rounds (200 max)
+        max_rounds = len(scrape_limits)
 
-            # Check minimum views
-            if views < config.min_views:
-                continue
+        for round_idx, batch_limit in enumerate(scrape_limits):
+            logger.info(f"[SUPER VISION] Scrape round {round_idx + 1}/{max_rounds}: limit={batch_limit}, found so far={len(parsed_videos)}/{target_count}")
 
-            # Check date
-            created_str = parsed.get("createdAt", "")
-            if created_str:
-                try:
-                    created_ts = datetime.fromtimestamp(int(created_str)) if created_str.isdigit() else datetime.fromisoformat(created_str.replace("Z", "+00:00")).replace(tzinfo=None)
-                    if created_ts < cutoff_date:
-                        continue
-                except Exception:
-                    pass
+            raw_items = collector.collect(keywords, limit=batch_limit, mode="search")
+            total_scraped += len(raw_items)
+            logger.info(f"[SUPER VISION] Round {round_idx + 1}: scraped {len(raw_items)} videos (total: {total_scraped})")
 
-            # Deduplicate against existing results
-            vid_id = str(parsed.get("id", "") or parsed.get("platform_id", ""))
-            if vid_id:
-                existing = db.query(SuperVisionResult).filter(
-                    SuperVisionResult.config_id == config.id,
-                    SuperVisionResult.video_platform_id == vid_id
-                ).first()
-                if existing:
+            if not raw_items:
+                break
+
+            round_found = 0
+            for idx, item in enumerate(raw_items):
+                # Quick dedup by raw ID before expensive parsing
+                raw_id = str(item.get("id", ""))
+                if raw_id in seen_ids:
+                    continue
+                seen_ids.add(raw_id)
+
+                parsed = parse_video_data(item, idx)
+                stats = parsed.get("stats", {})
+                views = stats.get("playCount", 0) if isinstance(stats, dict) else 0
+
+                # Check minimum views
+                if views < config.min_views:
                     continue
 
-            parsed_videos.append(parsed)
+                # Check date — try createTime from Apify, fallback to Snowflake ID decode
+                created_ts = None
+                created_raw = parsed.get("createdAt", "") or ""
+                if created_raw:
+                    try:
+                        if isinstance(created_raw, (int, float)):
+                            created_ts = datetime.fromtimestamp(int(created_raw))
+                        elif isinstance(created_raw, str) and created_raw.isdigit():
+                            created_ts = datetime.fromtimestamp(int(created_raw))
+                        elif isinstance(created_raw, str) and created_raw:
+                            created_ts = datetime.fromisoformat(created_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+                    except Exception:
+                        pass
 
+                # Fallback: decode creation date from TikTok Snowflake video ID
+                if not created_ts:
+                    vid_id_raw = parsed.get("id", "") or ""
+                    try:
+                        vid_int = int(vid_id_raw)
+                        if vid_int > 1000000000000000:  # valid TikTok Snowflake ID
+                            created_ts = datetime.fromtimestamp(vid_int >> 32)
+                    except (ValueError, OSError):
+                        pass
+
+                if created_ts:
+                    if created_ts < cutoff_date:
+                        continue
+                else:
+                    continue  # no date = skip
+
+                # Deduplicate against existing DB results
+                vid_id = str(parsed.get("id", "") or parsed.get("platform_id", ""))
+                if vid_id:
+                    existing = db.query(SuperVisionResult).filter(
+                        SuperVisionResult.config_id == config.id,
+                        SuperVisionResult.video_platform_id == vid_id
+                    ).first()
+                    if existing:
+                        continue
+
+                parsed_videos.append(parsed)
+                round_found += 1
+
+            logger.info(f"[SUPER VISION] Round {round_idx + 1}: +{round_found} passed filters, total={len(parsed_videos)}")
+
+            # Stop if we have enough candidates
+            if len(parsed_videos) >= target_count:
+                logger.info(f"[SUPER VISION] Got enough candidates ({len(parsed_videos)}>={target_count}), stopping scrape")
+                break
+
+        scan_stats["scraped"] = total_scraped
+        scan_stats["scrape_rounds"] = round_idx + 1
         scan_stats["after_views_filter"] = len(parsed_videos)
-        logger.info(f"[SUPER VISION] After views/date filter: {len(parsed_videos)}")
+        logger.info(f"[SUPER VISION] After {round_idx + 1} rounds: {total_scraped} scraped → {len(parsed_videos)} passed views/date filter")
 
         if not parsed_videos:
             config.last_run_at = datetime.utcnow()
@@ -212,6 +254,7 @@ def run_super_vision_scan(config_id: int):
             config.last_run_stats = scan_stats
             config.next_run_at = datetime.utcnow() + timedelta(hours=config.scan_interval_hours)
             db.commit()
+            logger.warning(f"[SUPER VISION] No videos passed filters after {total_scraped} scraped (min_views={config.min_views}, date_range={config.date_range_days}d)")
             return
 
         # ── STEP 4: Metadata pre-filter ─────────────────────
@@ -278,11 +321,11 @@ def run_super_vision_scan(config_id: int):
         scan_stats["vision_analyzed"] = vision_analyzed
 
         # ── STEP 7: Compute final scores + store results ────
-        all_candidates = above_threshold  # includes both vision and non-vision
-        results_stored = 0
+        # Score all candidates first, then take top N
+        scored_candidates = []
         seen_vid_ids = set()  # Deduplicate within batch
 
-        for video in all_candidates:
+        for video in above_threshold:
             text_score = video.get("relevance_score", 0)
             vision_score = video.get("vision_score")
 
@@ -304,28 +347,52 @@ def run_super_vision_scan(config_id: int):
             if existing:
                 continue
 
+            scored_candidates.append({
+                **video,
+                "_final_score": final_score,
+                "_text_score": text_score,
+                "_vision_score": vision_score,
+                "_vid_id": vid_id,
+            })
+
+        # Sort by final score (vision-analyzed first, then by score)
+        scored_candidates.sort(
+            key=lambda v: (
+                1 if v.get("_vision_score") is not None else 0,
+                v["_final_score"]
+            ),
+            reverse=True
+        )
+
+        # Limit to max_vision_videos (this is the user's "max videos per scan" setting)
+        max_to_store = config.max_vision_videos
+        top_candidates = scored_candidates[:max_to_store]
+
+        results_stored = 0
+        for video in top_candidates:
             result = SuperVisionResult(
                 config_id=config.id,
                 user_id=config.user_id,
                 project_id=config.project_id,
-                video_platform_id=vid_id,
+                video_platform_id=video["_vid_id"],
                 video_url=video.get("url", "") or video.get("webVideoUrl", ""),
                 video_cover_url=video.get("cover_url", ""),
                 video_play_addr=video.get("play_addr", ""),
                 video_description=(video.get("description", "") or "")[:500],
                 video_author=video.get("author_username", ""),
                 video_stats=video.get("stats", {}),
-                text_score=text_score,
+                text_score=video["_text_score"],
                 text_reason=video.get("relevance_reason", "")[:255] if video.get("relevance_reason") else None,
-                vision_score=vision_score,
+                vision_score=video["_vision_score"],
                 vision_analysis=video.get("vision_analysis"),
                 vision_match_reason=video.get("vision_match_reason"),
-                final_score=final_score,
+                final_score=video["_final_score"],
                 scan_batch_id=batch_id,
             )
             db.add(result)
             results_stored += 1
 
+        logger.info(f"[SUPER VISION] Storing top {results_stored} of {len(scored_candidates)} candidates (limit={max_to_store})")
         scan_stats["final_results"] = results_stored
 
         # ── STEP 8: Deduct credits + update config ──────────

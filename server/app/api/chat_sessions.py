@@ -95,18 +95,23 @@ USER REQUEST: {user_message}{suffix}"""
             if not client:
                 raise Exception("Gemini API not configured - add GEMINI_API_KEY to .env")
 
-            # Try newer model first, fallback to older
-            try:
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=full_prompt
-                )
-            except Exception:
-                # Fallback to gemini-1.5-flash-latest
-                response = client.models.generate_content(
-                    model="gemini-1.5-flash-latest",
-                    contents=full_prompt
-                )
+            # Try with retry on rate limit
+            max_retries = 3
+            response = None
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-2.0-flash",
+                        contents=full_prompt
+                    )
+                    break
+                except Exception as e:
+                    error_str = str(e)
+                    if ("429" in error_str or "RESOURCE_EXHAUSTED" in error_str) and attempt < max_retries - 1:
+                        import asyncio
+                        await asyncio.sleep((attempt + 1) * 5)
+                        continue
+                    raise
             return response.text.strip() if response.text else "I couldn't generate a response."
 
         elif model == "claude":
@@ -139,7 +144,7 @@ USER REQUEST: {user_message}{suffix}"""
             return response.choices[0].message.content.strip() if response.choices else "I couldn't generate a response."
 
         elif model == "nano-bana":
-            # Image generation using Gemini
+            # Image generation using Gemini 2.5 Flash Image
             client = get_gemini_client()
             if not client:
                 raise Exception("Gemini API not configured - add GEMINI_API_KEY to .env")
@@ -149,38 +154,104 @@ USER REQUEST: {user_message}{suffix}"""
                 from pathlib import Path
                 import uuid as _uuid
 
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash-image",
-                    contents=user_message,
-                    config=types.GenerateContentConfig(
-                        response_modalities=["Text", "Image"]
-                    )
-                )
+                # Extract creator profile from system_prompt for image context
+                profile_summary = ""
+                if "CREATOR PROFILE" in system_prompt or "PROJECT NAME:" in system_prompt:
+                    profile_lines = []
+                    for line in system_prompt.split('\n'):
+                        s = line.strip()
+                        # Match actual field labels from project_context
+                        if s.startswith((
+                            'PROJECT NAME:', 'NICHE:', 'SUB-NICHE:',
+                            'CONTENT FORMATS:', 'PLATFORMS:', 'TONE & STYLE:',
+                            'KEYWORDS (', 'ANTI-KEYWORDS (', 'REFERENCE ACCOUNTS:',
+                        )):
+                            profile_lines.append(s)
+                    if profile_lines:
+                        profile_summary = '\n'.join(profile_lines)
 
-                result_parts = []
+                print(f"[AI] Nano Bana: profile_found={bool(profile_summary)}, user_msg='{user_message[:100]}'")
+
+                # Build image prompt with creator context baked in
+                if profile_summary:
+                    image_prompt = f"""Generate an image for a content creator with this brand:
+{profile_summary}
+
+Request: {user_message}
+
+Create a vibrant, professional, aesthetic image matching this creator's niche and style."""
+                else:
+                    image_prompt = f"""Generate an image: {user_message}
+
+Create a vibrant, professional, high-quality image."""
+
+                print(f"[AI] Nano Bana final prompt ({len(image_prompt)} chars): {image_prompt[:300]}")
+
                 uploads_dir = Path(__file__).parent.parent.parent / "uploads" / "generated"
                 uploads_dir.mkdir(parents=True, exist_ok=True)
 
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                        # Save image to file
-                        ext = "png" if "png" in (part.inline_data.mime_type or "") else "jpg"
-                        filename = f"{_uuid.uuid4().hex}.{ext}"
-                        filepath = uploads_dir / filename
-                        filepath.write_bytes(part.inline_data.data)
-                        img_url = f"/uploads/generated/{filename}"
-                        result_parts.append(f"![Generated Image]({img_url})")
-                        print(f"[AI] Image saved: {filepath} ({len(part.inline_data.data)} bytes)")
-                    elif hasattr(part, 'text') and part.text:
-                        result_parts.append(part.text.strip())
+                # Attempt 1: Image-only modality (forces Gemini to generate image, not text)
+                for attempt in range(2):
+                    try:
+                        if attempt == 0:
+                            # Force image-only output
+                            response = client.models.generate_content(
+                                model="gemini-2.5-flash-image",
+                                contents=image_prompt,
+                                config=types.GenerateContentConfig(
+                                    response_modalities=["Image"]
+                                )
+                            )
+                        else:
+                            # Fallback: allow text+image
+                            response = client.models.generate_content(
+                                model="gemini-2.5-flash-image",
+                                contents=f"Generate an image: {user_message}",
+                                config=types.GenerateContentConfig(
+                                    response_modalities=["Image", "Text"]
+                                )
+                            )
+                    except Exception as api_err:
+                        error_str = str(api_err)
+                        print(f"[AI] Nano Bana API error attempt {attempt+1}: {error_str}")
+                        # If Image-only modality not supported, try with Text+Image
+                        if attempt == 0:
+                            import asyncio
+                            await asyncio.sleep(2)
+                            continue
+                        raise
 
+                    # Parse response for images
+                    result_parts = []
+                    has_image = False
+
+                    if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                        for part in response.candidates[0].content.parts:
+                            if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
+                                ext = "png" if "png" in (part.inline_data.mime_type or "") else "jpg"
+                                filename = f"{_uuid.uuid4().hex}.{ext}"
+                                filepath = uploads_dir / filename
+                                filepath.write_bytes(part.inline_data.data)
+                                img_url = f"/uploads/generated/{filename}"
+                                result_parts.append(f"![Generated Image]({img_url})")
+                                has_image = True
+                                print(f"[AI] Nano Bana image saved: {filepath} ({len(part.inline_data.data)} bytes)")
+                            elif hasattr(part, 'text') and part.text:
+                                result_parts.append(part.text.strip())
+
+                    if has_image:
+                        return "\n\n".join(result_parts)
+
+                    print(f"[AI] Nano Bana attempt {attempt+1}: no image in response, text={result_parts[:1]}")
+
+                # Both attempts failed to produce image
                 if result_parts:
                     return "\n\n".join(result_parts)
-                return "Could not generate an image. Try a more descriptive prompt."
+                return "Could not generate an image. Please try a more descriptive prompt."
 
             except Exception as img_err:
-                print(f"[AI] Nano Bana image generation error: {img_err}")
-                return await generate_ai_response("gemini", "You are an image generation assistant. The user wants to generate an image. Describe in detail what the image would look like, and apologize that image generation is temporarily unavailable.", user_message, history_text)
+                print(f"[AI] Nano Bana error: {img_err}")
+                return f"Image generation error: {str(img_err)[:200]}. Please try again."
 
         else:
             # Default to Gemini
@@ -731,15 +802,59 @@ async def send_message(
             if project and project.profile_data:
                 p = project.profile_data
                 audience = p.get('audience', {})
-                audience_str = f"Age: {audience.get('age', 'any')}, Gender: {audience.get('gender', 'any')}, Interests: {', '.join(audience.get('interests', []))}" if isinstance(audience, dict) else str(audience)
-                project_context = f"""PROJECT CONTEXT (tailor ALL responses for this project):
-- Project: {project.name}
-- Niche: {p.get('niche', '')} ({p.get('sub_niche', '')})
-- Content format: {', '.join(p.get('format', []))}
-- Target audience: {audience_str}
-- Tone/style: {p.get('tone', '')}
-- Platforms: {', '.join(p.get('platforms', []))}
-- MUST AVOID: {', '.join(p.get('exclude', []))}
+                if isinstance(audience, dict):
+                    audience_parts = []
+                    if audience.get('age'): audience_parts.append(f"Age: {audience['age']}")
+                    if audience.get('gender'): audience_parts.append(f"Gender: {audience['gender']}")
+                    if audience.get('level'): audience_parts.append(f"Level: {audience['level']}")
+                    if audience.get('interests'): audience_parts.append(f"Interests: {', '.join(audience['interests'])}")
+                    audience_str = ', '.join(audience_parts)
+                else:
+                    audience_str = str(audience)
+
+                keywords_list = p.get('keywords', [])
+                anti_keywords_list = p.get('anti_keywords', [])
+                exclude_list = p.get('exclude', [])
+                format_list = p.get('format', [])
+                platforms_list = p.get('platforms', [])
+                tone_str = p.get('tone', '')
+                ref_accounts = p.get('reference_accounts', [])
+
+                # Include creator's own Q&A answers for deeper context
+                creator_qa = ""
+                if project.raw_input and project.raw_input.get('description_text'):
+                    creator_qa = project.raw_input['description_text']
+
+                project_context = f"""===== CREATOR PROFILE (THIS IS THE COMPLETE PROFILE — use ALL data, never omit any field) =====
+
+PROJECT NAME: {project.name}
+NICHE: {p.get('niche', '')}
+SUB-NICHE: {p.get('sub_niche', '')}
+CONTENT FORMATS: {', '.join(format_list)}
+PLATFORMS: {', '.join(platforms_list)}
+TONE & STYLE: {tone_str}
+
+TARGET AUDIENCE:
+  {audience_str}
+
+KEYWORDS (ALL {len(keywords_list)} must be referenced when relevant):
+  {', '.join(keywords_list)}
+
+ANTI-KEYWORDS (topics to avoid, ALL {len(anti_keywords_list)}):
+  {', '.join(anti_keywords_list)}
+
+EXCLUDED CONTENT TYPES (ALL {len(exclude_list)}):
+  {', '.join(exclude_list)}
+
+REFERENCE ACCOUNTS: {', '.join(ref_accounts) if ref_accounts else 'none yet'}
+
+CREATOR'S OWN WORDS (from onboarding Q&A — this reveals their true voice, goals, and unique angle):
+{creator_qa if creator_qa else 'Not provided'}
+
+===== END PROFILE =====
+
+INSTRUCTIONS: When the user asks for a brief, summary, or description of their content — include EVERY field above without exception. List ALL keywords, ALL anti-keywords, ALL excluded types, ALL tone descriptors. Do not summarize or shorten lists. The creator filled these out carefully — respect that by including everything.
+
 """
                 full_system_prompt = project_context + "\n" + full_system_prompt
 

@@ -990,6 +990,23 @@ class ApiService {
     await apiClient.delete(`/projects/${id}`);
   }
 
+  async generateProjectQuestions(id: number, data: {
+    form_data: Record<string, any>;
+  }): Promise<{ questions: string[] }> {
+    // Always ensure language is set correctly at the moment of API call
+    const formData = { ...data.form_data };
+    if (!formData.language) {
+      const stored = localStorage.getItem('rizko_language') || 'en';
+      formData.language = stored.startsWith('ru') ? 'Russian' : 'English';
+    }
+    console.log('[API] generateProjectQuestions → language:', formData.language, '(localStorage:', localStorage.getItem('rizko_language'), ')');
+    const response = await apiClient.post(`/projects/${id}/generate-questions`, {
+      form_data: formData,
+      description_text: '',
+    });
+    return response.data;
+  }
+
   async generateProjectProfile(id: number, data: {
     form_data: Record<string, any>;
     description_text: string;
