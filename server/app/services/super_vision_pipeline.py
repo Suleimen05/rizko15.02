@@ -368,6 +368,12 @@ def run_super_vision_scan(config_id: int):
         max_to_store = config.max_vision_videos
         top_candidates = scored_candidates[:max_to_store]
 
+        # Refresh DB connection — long-running scan (Apify + Vision) may drop the connection
+        db.close()
+        db = SessionLocal()
+        config = db.query(SuperVisionConfig).filter(SuperVisionConfig.id == config_id).first()
+        user = db.query(User).filter(User.id == config.user_id).first()
+
         results_stored = 0
         for video in top_candidates:
             result = SuperVisionResult(
