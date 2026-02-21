@@ -1489,6 +1489,10 @@ class ApiService {
     await apiClient.post(`/super-vision/results/${resultId}/save`);
   }
 
+  async unsaveSuperVisionResult(resultId: number): Promise<void> {
+    await apiClient.delete(`/super-vision/results/${resultId}/save`);
+  }
+
   async getSuperVisionStatus(): Promise<any[]> {
     const response = await apiClient.get('/super-vision/status');
     return response.data;

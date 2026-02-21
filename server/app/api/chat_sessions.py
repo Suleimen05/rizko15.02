@@ -80,7 +80,7 @@ async def generate_ai_response(model: str, system_prompt: str, user_message: str
     if mode == "prompt-enhancer":
         suffix = ""
     else:
-        suffix = "\n\nRespond in a helpful, structured way. Use markdown formatting (bold, bullets, headers) for readability.\nKeep the response focused, concise, and actionable. Avoid overly long responses -- be brief but informative."
+        suffix = "\n\n[FINAL REMINDER] Use emojis naturally throughout to make the response lively and easy to scan. Add blank lines between sections for breathing room. Use clean markdown: bold key points, emoji-prefixed bullets, headers with emojis. Be focused and concise. Do NOT include any profile data, keyword lists, or profile sections in your response."
 
     full_prompt = f"""{system_prompt}
 
@@ -100,9 +100,11 @@ USER REQUEST: {user_message}{suffix}"""
             response = None
             for attempt in range(max_retries):
                 try:
+                    from google.genai import types as _gtypes
                     response = client.models.generate_content(
                         model="gemini-2.0-flash",
-                        contents=full_prompt
+                        contents=full_prompt,
+                        config=_gtypes.GenerateContentConfig(temperature=1.5)
                     )
                     break
                 except Exception as e:
@@ -122,6 +124,7 @@ USER REQUEST: {user_message}{suffix}"""
             response = client.messages.create(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=4096,
+                temperature=1.0,
                 messages=[
                     {"role": "user", "content": full_prompt}
                 ]
@@ -139,7 +142,8 @@ USER REQUEST: {user_message}{suffix}"""
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"CONVERSATION HISTORY:\n{history_text}\n\nUSER REQUEST: {user_message}"}
                 ],
-                max_tokens=4096
+                max_tokens=4096,
+                temperature=1.5
             )
             return response.choices[0].message.content.strip() if response.choices else "I couldn't generate a response."
 
@@ -372,48 +376,65 @@ class ChatResponse(BaseModel):
 
 MODE_PROMPTS = {
     "script": """You are an expert viral TikTok script writer. Create engaging, hook-driven scripts that capture attention in the first 3 seconds.
-Format your response with:
-1. **Hook** (first 3 seconds)
-2. **Body** (main content, bullet points)
-3. **Call to Action**
-4. **Pro Tips** for maximum engagement
 
-Keep responses concise and actionable. No fluff.""",
+Format your response with emojis and clear sections:
+
+🎣 **Hook** (first 3 seconds)
+📖 **Body** (main content)
+📣 **Call to Action**
+💡 **Pro Tips**
+
+Use emojis on bullet points. Add blank lines between sections. Be punchy, no fluff.""",
 
     "ideas": """You are a creative TikTok content strategist. Generate unique, trending video ideas with viral potential.
-For each idea include:
-- Video concept
-- Why it could go viral
-- Best posting time
-- Suggested hashtags
 
-Be brief and specific.""",
+For each idea use this format with emojis:
 
-    "analysis": """You are a TikTok analytics expert. Analyze trends, content strategies, and viral mechanics.
-Provide concise insights on:
-- What makes content successful
-- Audience behavior patterns
-- Growth opportunities
-- Competitor strategies""",
+💡 **Idea title**
+🎬 Concept: ...
+🔥 Why it could go viral: ...
+⏰ Best posting time: ...
+#️⃣ Hashtags: ...
+
+Add blank lines between ideas. Be specific and energetic.""",
+
+    "analysis": """You are a TikTok analytics expert. Analyze the video or topic the user asks about directly.
+
+Structure your response with emojis and blank lines between sections:
+
+📊 **Performance** — stats and reach
+🎯 **Why it works** — hooks, pacing, editing, format
+🔥 **Viral mechanics** — what makes it spread
+✅ **Key takeaways** — actionable observations
+
+STRICT RULES:
+- Analyze ONLY the video/content itself
+- NEVER mention the creator's profile, keywords, anti-keywords, or any profile data
+- Do NOT say "based on your niche", "given your keywords", "for your audience"
+- Deliver clean, direct analysis with emojis and breathing room between sections""",
 
     "improve": """You are a content optimization specialist. Take existing scripts/content and make them more engaging and viral.
-Focus on:
-- Stronger hooks
-- Better pacing
-- More emotional triggers
-- Clearer call-to-action
 
-Be concise.""",
+Structure your response with emojis:
+
+🔍 **What's weak** — honest critique
+✨ **Improved version** — rewritten content
+💡 **Why these changes work**
+
+Add blank lines between sections. Be direct and actionable.""",
 
     "hook": """You are a hook specialist. Create attention-grabbing opening lines that stop the scroll.
-Provide:
-- 5 different hook variations
-- Why each works psychologically
-- Best delivery tips
 
-Keep it short and punchy.""",
+Provide 5 hook variations, each formatted as:
 
-    "chat": """You are a friendly and helpful AI assistant. Have a natural conversation with the user. Answer their questions directly and concisely. Do not format responses as scripts, hooks, or content strategies unless the user specifically asks for that.""",
+🎣 **Hook #N:** "..."
+🧠 *Why it works:* ...
+
+Add blank lines between hooks. Keep it punchy.""",
+
+    "chat": """You are a friendly and helpful AI assistant. Have a natural conversation with the user.
+
+Use emojis naturally to keep the tone warm and engaging. Add blank lines between paragraphs for readability. Answer directly and concisely. Do not format responses as scripts or strategies unless the user asks.""",
 
     "prompt-enhancer": """You are a world-class Prompt Engineer. You take a rough idea and turn it into a perfect, professional prompt.
 
@@ -760,10 +781,25 @@ async def send_message(
     db.add(user_msg)
 
     # Build history text for AI
+    # Strip profile dumps from old assistant messages so AI doesn't reproduce the pattern
+    PROFILE_MARKERS = [
+        "CREATOR PROFILE", "===== ПРОФИЛЬ", "ПРОФИЛЬ КАНАЛА", "ПРОФИЛЬ СОЗДАТЕЛЯ",
+        "КЛЮЧЕВЫЕ СЛОВА:", "KEYWORDS:", "ANTI-KEYWORDS", "АНТИ-КЛЮЧЕВЫЕ",
+        "НАЗВАНИЕ ПРОЕКТА:", "PROJECT NAME:", "===== END PROFILE"
+    ]
     history_text = ""
     for msg in history:
         role = "User" if msg.role == "user" else "Assistant"
-        history_text += f"{role}: {msg.content}\n"
+        content = msg.content
+        if msg.role == "assistant":
+            # If assistant message contains profile dump, truncate before it
+            lower = content.lower()
+            for marker in PROFILE_MARKERS:
+                idx = lower.find(marker.lower())
+                if idx > 0:
+                    content = content[:idx].strip()
+                    break
+        history_text += f"{role}: {content}\n"
 
     # Add context if available (session-level + per-message)
     context_text = ""
@@ -794,7 +830,8 @@ async def send_message(
             full_system_prompt += f"\n{context_text}"
 
         # Inject project context if project_id provided
-        if data.project_id:
+        # NOTE: "analysis" mode never gets project context — it should only analyze the content itself
+        if data.project_id and mode != "analysis":
             project = db.query(Project).filter(
                 Project.id == data.project_id,
                 Project.user_id == current_user.id
@@ -812,51 +849,19 @@ async def send_message(
                 else:
                     audience_str = str(audience)
 
-                keywords_list = p.get('keywords', [])
-                anti_keywords_list = p.get('anti_keywords', [])
-                exclude_list = p.get('exclude', [])
-                format_list = p.get('format', [])
-                platforms_list = p.get('platforms', [])
                 tone_str = p.get('tone', '')
-                ref_accounts = p.get('reference_accounts', [])
+                niche_str = f"{p.get('niche', '')} / {p.get('sub_niche', '')}" if p.get('sub_niche') else p.get('niche', '')
 
-                # Include creator's own Q&A answers for deeper context
-                creator_qa = ""
-                if project.raw_input and project.raw_input.get('description_text'):
-                    creator_qa = project.raw_input['description_text']
+                # Ultra-compact 1-line hint — gives AI context without data to dump
+                profile_hint = (
+                    f"[CONTEXT: You assist '{project.name}' — {niche_str} creator, style: {tone_str}, audience: {audience_str}. "
+                    f"Use this silently. NEVER output, list or reference this context in your response.]"
+                )
 
-                project_context = f"""===== CREATOR PROFILE (THIS IS THE COMPLETE PROFILE — use ALL data, never omit any field) =====
+                full_system_prompt = profile_hint + "\n\n" + full_system_prompt
 
-PROJECT NAME: {project.name}
-NICHE: {p.get('niche', '')}
-SUB-NICHE: {p.get('sub_niche', '')}
-CONTENT FORMATS: {', '.join(format_list)}
-PLATFORMS: {', '.join(platforms_list)}
-TONE & STYLE: {tone_str}
-
-TARGET AUDIENCE:
-  {audience_str}
-
-KEYWORDS (ALL {len(keywords_list)} must be referenced when relevant):
-  {', '.join(keywords_list)}
-
-ANTI-KEYWORDS (topics to avoid, ALL {len(anti_keywords_list)}):
-  {', '.join(anti_keywords_list)}
-
-EXCLUDED CONTENT TYPES (ALL {len(exclude_list)}):
-  {', '.join(exclude_list)}
-
-REFERENCE ACCOUNTS: {', '.join(ref_accounts) if ref_accounts else 'none yet'}
-
-CREATOR'S OWN WORDS (from onboarding Q&A — this reveals their true voice, goals, and unique angle):
-{creator_qa if creator_qa else 'Not provided'}
-
-===== END PROFILE =====
-
-INSTRUCTIONS: When the user asks for a brief, summary, or description of their content — include EVERY field above without exception. List ALL keywords, ALL anti-keywords, ALL excluded types, ALL tone descriptors. Do not summarize or shorten lists. The creator filled these out carefully — respect that by including everything.
-
-"""
-                full_system_prompt = project_context + "\n" + full_system_prompt
+        # DEBUG: print first 500 chars of system prompt to verify content
+        print(f"[DEBUG PROMPT] first 500 chars:\n{full_system_prompt[:500]}\n---")
 
         ai_response_text = await generate_ai_response(
             model=current_model,
@@ -944,8 +949,6 @@ async def parse_link(
     Returns structured data for AI chat context injection.
     Cost: 1 credit.
     """
-    import re
-
     # Check credits (1 credit for parse-link)
     CreditManager.check_and_reset_monthly(current_user, db)
     total_credits = (current_user.credits or 0) + (current_user.rollover_credits or 0) + (current_user.bonus_credits or 0)
@@ -957,54 +960,49 @@ async def parse_link(
 
     url = data.url.strip()
 
-    # Detect platform
-    platform = "unknown"
-    if "tiktok.com" in url:
-        platform = "tiktok"
-    elif "instagram.com" in url:
-        platform = "instagram"
-    elif "youtube.com" in url or "youtu.be" in url:
-        platform = "youtube"
-
-    # Use Apify to fetch video metadata
+    # Extract metadata via yt-dlp (supports TikTok short URLs, Instagram, YouTube)
     try:
-        from apify_client import ApifyClient
-        apify_token = os.getenv("APIFY_TOKEN")
-        if not apify_token:
-            raise HTTPException(status_code=500, detail="Apify token not configured")
+        import yt_dlp
+        import asyncio
 
-        client = ApifyClient(apify_token)
-
-        if platform == "tiktok":
-            run_input = {
-                "postURLs": [url],
-                "maxProfilesPerQuery": 1,
-                "resultsPerPage": 1,
+        def _extract_info(video_url: str) -> dict:
+            ydl_opts = {
+                'skip_download': True,
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
             }
-            run = client.actor("clockworks/free-tiktok-scraper").call(run_input=run_input, timeout_secs=30)
-            items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(video_url, download=False) or {}
 
-            if not items:
-                raise HTTPException(status_code=404, detail="Could not fetch video data")
+        info = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(None, _extract_info, url),
+            timeout=20
+        )
 
-            video = items[0]
-            description = video.get("text", "") or video.get("description", "")
-            author = video.get("authorMeta", {}).get("name", "") or video.get("author", "")
-            stats = {
-                "views": video.get("playCount", 0) or video.get("videoMeta", {}).get("playCount", 0),
-                "likes": video.get("diggCount", 0) or video.get("likesCount", 0),
-                "comments": video.get("commentCount", 0),
-                "shares": video.get("shareCount", 0),
-            }
-            hashtags = [h.get("name", "") for h in video.get("hashtags", [])]
-            music = video.get("musicMeta", {}).get("musicName", "")
-        else:
-            # For non-TikTok, return basic info from URL
-            description = f"Video from {platform}: {url}"
-            author = ""
-            stats = {"views": 0, "likes": 0, "comments": 0}
-            hashtags = []
-            music = None
+        if not info:
+            raise HTTPException(status_code=404, detail="Could not fetch video data")
+
+        # Detect platform from resolved URL
+        webpage_url = info.get('webpage_url', url)
+        platform = "unknown"
+        if "tiktok.com" in webpage_url:
+            platform = "tiktok"
+        elif "instagram.com" in webpage_url:
+            platform = "instagram"
+        elif "youtube.com" in webpage_url or "youtu.be" in webpage_url:
+            platform = "youtube"
+
+        description = info.get('description') or info.get('title') or ''
+        author = info.get('uploader') or info.get('channel') or info.get('creator') or ''
+        stats = {
+            "views":    info.get('view_count') or 0,
+            "likes":    info.get('like_count') or 0,
+            "comments": info.get('comment_count') or 0,
+            "shares":   info.get('repost_count') or 0,
+        }
+        hashtags = [t for t in (info.get('tags') or []) if t]
+        music = info.get('track') or info.get('artist') or None
 
         # Deduct 1 credit
         await CreditManager.deduct_credits(1, current_user, db)
@@ -1020,6 +1018,8 @@ async def parse_link(
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=408, detail="Timeout fetching video data")
     except Exception as e:
         print(f"[ParseLink] Error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to parse link: {str(e)}")

@@ -15,15 +15,16 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  ChevronDown,
   Bookmark,
-  BookmarkCheck,
   ArrowUpCircle,
   Sparkles,
   Filter,
+  ExternalLink,
+  TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProject } from '@/contexts/ProjectContext';
@@ -113,146 +114,218 @@ const VISION_OPTIONS = [
 function ResultCard({
   result,
   onDismiss,
-  onSave,
+  onToggleSave,
 }: {
   result: SuperVisionResult;
   onDismiss: (id: number) => void;
-  onSave: (id: number) => void;
+  onToggleSave: (id: number, isSaved: boolean) => void;
 }) {
-  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const scoreColor = result.final_score >= 80
-    ? 'from-green-500 to-emerald-600'
+    ? 'from-red-500 to-orange-500'
     : result.final_score >= 60
     ? 'from-yellow-500 to-orange-500'
-    : 'from-red-500 to-pink-500';
+    : result.final_score >= 40
+    ? 'from-blue-500 to-purple-500'
+    : 'from-gray-400 to-gray-500';
 
   return (
-    <Card className="overflow-hidden bg-card border-border/50 hover:border-border transition-colors group">
-      {/* Video Thumbnail */}
-      <div className="relative aspect-[9/16] max-h-[280px] bg-muted overflow-hidden">
+    <Card
+      className={cn(
+        'group relative overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-[1.02] cursor-pointer border-2',
+        result.final_score >= 80 && 'border-red-500/30 hover:border-red-500/60',
+        result.final_score >= 60 && result.final_score < 80 && 'border-yellow-500/30 hover:border-yellow-500/60',
+        result.final_score < 60 && 'hover:border-purple-500/40',
+      )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Thumbnail */}
+      <div className="relative aspect-[9/16] overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900">
         {result.video_cover_url ? (
           <img
             src={result.video_cover_url}
             alt=""
-            className="w-full h-full object-cover"
+            className={cn(
+              'w-full h-full object-cover transition-transform duration-300',
+              isHovered && 'scale-110'
+            )}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-            <Play className="h-8 w-8" />
+          <div className="w-full h-full flex items-center justify-center text-gray-500">
+            <Play className="h-16 w-16" />
           </div>
         )}
 
-        {/* Score badge */}
+        {/* Gradient overlay */}
         <div className={cn(
-          "absolute top-2 left-2 px-2 py-1 rounded-full text-white text-xs font-bold bg-gradient-to-r",
-          scoreColor
+          'absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity duration-300',
+          isHovered ? 'opacity-100' : 'opacity-60'
         )}>
-          {result.final_score}
+          {/* Play button */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className={cn(
+              'rounded-full bg-white/90 flex items-center justify-center transition-all duration-300 shadow-lg',
+              isHovered ? 'w-16 h-16 scale-110' : 'w-12 h-12'
+            )}>
+              <Play className={cn(
+                'text-black fill-black ml-1',
+                isHovered ? 'h-8 w-8' : 'h-6 w-6'
+              )} />
+            </div>
+          </div>
         </div>
 
-        {/* Vision badge */}
+        {/* Score badge top-left */}
+        <Badge
+          className={cn(
+            'absolute top-2 left-2 text-white border-0 font-bold text-sm px-3 py-1',
+            `bg-gradient-to-r ${scoreColor}`
+          )}
+        >
+          <TrendingUp className="h-3.5 w-3.5 mr-1" />
+          {result.final_score}
+        </Badge>
+
+        {/* Vision badge below score */}
         {result.vision_score !== null && (
-          <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-purple-600/90 text-white text-[10px] font-medium flex items-center gap-0.5">
+          <div className="absolute top-10 left-2 px-1.5 py-0.5 rounded bg-purple-600/90 text-white text-[10px] font-medium flex items-center gap-0.5">
             <ScanEye className="h-2.5 w-2.5" />
             {result.vision_score}
           </div>
         )}
 
-        {/* Play button overlay */}
+        {/* Open in TikTok - bottom right */}
         {result.video_url && (
-          <a
-            href={result.video_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute bottom-2 right-2 h-8 w-8 bg-black/70 hover:bg-black/90 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(result.video_url!, '_blank');
+            }}
           >
-            <Play className="h-10 w-10 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
-          </a>
+            <ExternalLink className="h-4 w-4" />
+          </Button>
         )}
+
+        {/* Dismiss button - top right */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-2 right-2 h-8 w-8 bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDismiss(result.id);
+          }}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+
+        {/* Save button - top right (left of dismiss) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'absolute top-2 right-12 h-8 w-8 bg-black/50 hover:bg-black/70 text-white transition-opacity z-10',
+            result.is_saved ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSave(result.id, result.is_saved);
+          }}
+        >
+          <Bookmark className={cn('h-4 w-4', result.is_saved && 'fill-white text-yellow-400')} />
+        </Button>
       </div>
 
       {/* Content */}
-      <div className="p-3 space-y-2">
+      <CardContent className="p-3 space-y-2">
         {/* Author */}
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-foreground">@{result.video_author}</span>
-          <div className="flex items-center gap-1">
-            {result.text_reason && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 truncate max-w-[80px]">
-                {result.text_reason}
-              </span>
-            )}
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+            {(result.video_author || 'U').charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-semibold truncate block">@{result.video_author}</span>
           </div>
         </div>
 
         {/* Description */}
-        <p className="text-[11px] text-muted-foreground line-clamp-2 min-h-[28px]">
+        <p className="text-xs line-clamp-2 text-foreground leading-snug">
           {result.video_description || 'No description'}
         </p>
 
-        {/* Stats */}
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
-          <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{formatNumber(result.video_stats?.playCount || 0)}</span>
-          <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" />{formatNumber(result.video_stats?.diggCount || 0)}</span>
-          <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" />{formatNumber(result.video_stats?.commentCount || 0)}</span>
-          <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" />{formatNumber(result.video_stats?.shareCount || 0)}</span>
+        {/* Stats 2x2 grid */}
+        <div className="space-y-1.5 pt-1.5 border-t">
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
+            <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
+              <Eye className="h-3 w-3" />
+              <span>{formatNumber(result.video_stats?.playCount || 0)}</span>
+            </div>
+            <div className="flex items-center gap-1 text-pink-600 dark:text-pink-400 font-medium">
+              <Heart className="h-3 w-3" />
+              <span>{formatNumber(result.video_stats?.diggCount || 0)}</span>
+            </div>
+            <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
+              <MessageCircle className="h-3 w-3" />
+              <span>{formatNumber(result.video_stats?.commentCount || 0)}</span>
+            </div>
+            <div className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+              <Share2 className="h-3 w-3" />
+              <span>{formatNumber(result.video_stats?.shareCount || 0)}</span>
+            </div>
+          </div>
         </div>
 
-        {/* Scores bar */}
-        <div className="flex items-center gap-2 text-[10px]">
-          <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+        {/* Score bar */}
+        <div className="pt-1 space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+              <ScanEye className="h-3 w-3" />
+              Match Score
+            </span>
+            <span className="text-base font-bold text-foreground">
+              {result.final_score}
+            </span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-muted overflow-hidden shadow-inner">
             <div
-              className={cn("h-full rounded-full bg-gradient-to-r", scoreColor)}
+              className={cn('h-full rounded-full transition-all duration-500 shadow-lg bg-gradient-to-r', scoreColor)}
               style={{ width: `${result.final_score}%` }}
             />
           </div>
-          <span className="text-muted-foreground font-medium">{result.final_score}%</span>
         </div>
 
         {/* Vision match reason */}
         {result.vision_match_reason && (
-          <button
-            onClick={() => setShowAnalysis(!showAnalysis)}
-            className="w-full text-left text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
-          >
-            <ScanEye className="h-3 w-3 flex-shrink-0" />
+          <p className="text-[10px] text-purple-400 flex items-center gap-1 truncate">
+            <Sparkles className="h-3 w-3 flex-shrink-0" />
             <span className="truncate">{result.vision_match_reason}</span>
-            <ChevronDown className={cn("h-3 w-3 flex-shrink-0 transition-transform", showAnalysis && "rotate-180")} />
-          </button>
+          </p>
         )}
 
-        {showAnalysis && result.vision_analysis && (
-          <div className="p-2 rounded-lg bg-purple-500/5 border border-purple-500/10 text-[10px] text-muted-foreground max-h-[120px] overflow-y-auto">
-            {result.vision_analysis.substring(0, 500)}
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center gap-1 pt-1">
+        {/* Action buttons */}
+        <div className="flex items-center gap-1 pt-1 border-t">
           <Button
-            variant="ghost"
+            variant={result.is_saved ? 'default' : 'outline'}
             size="sm"
-            className="h-7 flex-1 text-xs"
-            onClick={() => onSave(result.id)}
-            disabled={result.is_saved}
-          >
-            {result.is_saved ? (
-              <><BookmarkCheck className="h-3 w-3 mr-1 text-green-500" />Saved</>
-            ) : (
-              <><Bookmark className="h-3 w-3 mr-1" />Save</>
+            className={cn(
+              'h-7 flex-1 text-xs gap-1',
+              result.is_saved && 'bg-yellow-500 hover:bg-yellow-600 text-white border-0'
             )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs text-muted-foreground hover:text-destructive"
-            onClick={() => onDismiss(result.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSave(result.id, result.is_saved);
+            }}
           >
-            <X className="h-3 w-3" />
+            <Bookmark className={cn('h-3 w-3', result.is_saved && 'fill-white')} />
+            {result.is_saved ? 'Saved' : 'Save'}
           </Button>
         </div>
-      </div>
+      </CardContent>
     </Card>
   );
 }
@@ -449,13 +522,19 @@ export default function SuperVision() {
     }
   };
 
-  const handleSave = async (resultId: number) => {
+  const handleToggleSave = async (resultId: number, currentlySaved: boolean) => {
     try {
-      await apiService.saveSuperVisionResult(resultId);
-      setResults(prev => prev.map(r => r.id === resultId ? { ...r, is_saved: true } : r));
-      toast.success('Saved!');
-    } catch {
-      toast.error('Failed to save');
+      if (currentlySaved) {
+        await apiService.unsaveSuperVisionResult(resultId);
+        setResults(prev => prev.map(r => r.id === resultId ? { ...r, is_saved: false } : r));
+        toast.success('Removed from favorites');
+      } else {
+        await apiService.saveSuperVisionResult(resultId);
+        setResults(prev => prev.map(r => r.id === resultId ? { ...r, is_saved: true } : r));
+        toast.success('Added to favorites!');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to update favorites');
     }
   };
 
@@ -867,7 +946,7 @@ export default function SuperVision() {
                 key={result.id}
                 result={result}
                 onDismiss={handleDismiss}
-                onSave={handleSave}
+                onToggleSave={handleToggleSave}
               />
             ))}
           </div>

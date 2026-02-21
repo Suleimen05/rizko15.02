@@ -15,7 +15,7 @@ from ..core.database import get_db
 from ..api.dependencies import get_current_user, require_pro
 from ..db.models import (
     User, Project, SuperVisionConfig, SuperVisionResult,
-    SuperVisionStatus, SubscriptionTier
+    SuperVisionStatus, SubscriptionTier, Trend, UserFavorite
 )
 
 logger = logging.getLogger(__name__)
@@ -413,7 +413,7 @@ async def save_result(
     current_user: User = Depends(require_pro),
     db: Session = Depends(get_db)
 ):
-    """Mark a Super Vision result as saved (adds to favorites too)."""
+    """Mark a Super Vision result as saved and add to user favorites."""
     result = db.query(SuperVisionResult).filter(
         SuperVisionResult.id == result_id,
         SuperVisionResult.user_id == current_user.id
@@ -421,9 +421,91 @@ async def save_result(
     if not result:
         raise HTTPException(status_code=404, detail="Result not found")
 
-    result.is_saved = True
-    db.commit()
-    return {"message": "Result saved"}
+    try:
+        # Find or create a Trend entry for this video so we can add to favorites
+        trend = db.query(Trend).filter(
+            Trend.user_id == current_user.id,
+            Trend.platform_id == result.video_platform_id
+        ).first()
+
+        if not trend:
+            trend = Trend(
+                user_id=current_user.id,
+                platform_id=result.video_platform_id,
+                url=result.video_url or '',
+                description=result.video_description or '',
+                cover_url=result.video_cover_url or '',
+                author_username=result.video_author or '',
+                stats=result.video_stats or {},
+                initial_stats=result.video_stats or {},
+                uts_score=float(result.final_score) if result.final_score else 0.0,
+                vertical='super_vision',
+                search_query='super_vision',
+            )
+            db.add(trend)
+            db.flush()  # get trend.id without committing
+
+        # Add to favorites if not already there
+        existing_fav = db.query(UserFavorite).filter(
+            UserFavorite.user_id == current_user.id,
+            UserFavorite.trend_id == trend.id
+        ).first()
+
+        if not existing_fav:
+            favorite = UserFavorite(
+                user_id=current_user.id,
+                trend_id=trend.id,
+                project_id=result.project_id,
+            )
+            db.add(favorite)
+
+        result.is_saved = True
+        db.commit()
+        logger.info(f"[SV] User {current_user.id} saved result {result_id} (trend_id={trend.id})")
+        return {"message": "Result saved", "trend_id": trend.id}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[SV] Failed to save result {result_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save: {str(e)}")
+
+
+@router.delete("/results/{result_id}/save")
+async def unsave_result(
+    result_id: int,
+    current_user: User = Depends(require_pro),
+    db: Session = Depends(get_db)
+):
+    """Remove a Super Vision result from saved/favorites."""
+    result = db.query(SuperVisionResult).filter(
+        SuperVisionResult.id == result_id,
+        SuperVisionResult.user_id == current_user.id
+    ).first()
+    if not result:
+        raise HTTPException(status_code=404, detail="Result not found")
+
+    try:
+        # Remove from favorites if the trend exists
+        if result.video_platform_id:
+            trend = db.query(Trend).filter(
+                Trend.user_id == current_user.id,
+                Trend.platform_id == result.video_platform_id
+            ).first()
+            if trend:
+                db.query(UserFavorite).filter(
+                    UserFavorite.user_id == current_user.id,
+                    UserFavorite.trend_id == trend.id
+                ).delete()
+
+        result.is_saved = False
+        db.commit()
+        logger.info(f"[SV] User {current_user.id} unsaved result {result_id}")
+        return {"message": "Result unsaved"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[SV] Failed to unsave result {result_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to unsave: {str(e)}")
 
 
 @router.delete("/results/{project_id}/clear")
